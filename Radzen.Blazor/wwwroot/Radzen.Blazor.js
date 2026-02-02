@@ -38,6 +38,17 @@ window.Radzen = {
             }
         };
     },
+    downloadFile: function (fileName, data, mimeType) {
+        const blob = new Blob([data], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        a.click();
+
+        URL.revokeObjectURL(url);
+    },
     mask: function (id, mask, pattern, characterPattern) {
       var el = document.getElementById(id);
       if (el) {
@@ -789,9 +800,9 @@ window.Radzen = {
 
     return [table.nextSelectedIndex, table.nextSelectedCellIndex];
   },
-  uploadInputChange: function (e, url, auto, multiple, clear, parameterName) {
+  uploadInputChange: function (e, url, auto, multiple, clear, parameterName, method = 'POST', stream = false) {
       if (auto) {
-          Radzen.upload(e.target, url, multiple, clear, parameterName);
+          Radzen.upload(e.target, url, multiple, clear, parameterName, method, stream);
           e.target.value = '';
       } else {
           Radzen.uploadChange(e.target);
@@ -848,12 +859,16 @@ window.Radzen = {
     var localFile = uploadComponent.localFiles.find(function (f) { return f.Name == name; });
     if (localFile) {
       URL.revokeObjectURL(localFile.Url);
+      var localIndex = uploadComponent.localFiles.indexOf(localFile);
+      if (localIndex != -1) {
+        uploadComponent.localFiles.splice(localIndex, 1);
+      }
     }
     var index = uploadComponent.files.indexOf(file)
     if (index != -1) {
         uploadComponent.files.splice(index, 1);
     }
-    var fileInput = document.getElementById(id);
+    var fileInput = document.getElementById(id).querySelector('input[type="file"]');
     if (fileInput && uploadComponent.files.length == 0) {
         fileInput.value = '';
     }
@@ -861,20 +876,35 @@ window.Radzen = {
   removeFileFromFileInput: function (fileInput) {
     fileInput.value = '';
   },
-  upload: function (fileInput, url, multiple, clear, parameterName) {
+  upload: function (fileInput, url, multiple, clear, parameterName, method = 'POST', stream = false) {
     var uploadComponent = Radzen.uploadComponents && Radzen.uploadComponents[fileInput.id];
     if (!uploadComponent) { return; }
     if (!uploadComponent.files || clear) {
         uploadComponent.files = Array.from(fileInput.files);
     }
-    var data = new FormData();
-    var files = [];
-    var cancelled = false;
-    for (var i = 0; i < uploadComponent.files.length; i++) {
-      var file = uploadComponent.files[i];
-      data.append(parameterName || (multiple ? 'files' : 'file'), file, file.name);
-      files.push({Name: file.name, Size: file.size});
-    }
+    
+	function asFormData() {
+		var data = new FormData();
+		var files = [];
+		for (var i = 0; i < uploadComponent.files.length; i++) {
+			var file = uploadComponent.files[i];
+			data.append(parameterName || (multiple ? 'files' : 'file'), file, file.name);
+			files.push({Name: file.name, Size: file.size});
+		}
+		return {data, files}
+	}
+	
+	function asStream() {
+		if (uploadComponent.files.length > 0) {
+			var file = uploadComponent.files[0];
+			return {data: file, files: [{Name: file.name, Size: file.size}]};
+		}
+		return {data: null, files: []}
+	}
+
+  	var cancelled = false;
+	var {data, files} = stream ? asStream() : asFormData();
+	
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.upload.onprogress = function (e) {
@@ -921,7 +951,7 @@ window.Radzen = {
       }
     };
     uploadComponent.invokeMethodAsync('GetHeaders').then(function (headers) {
-      xhr.open('POST', url, true);
+      xhr.open(method, url, true);
       for (var name in headers) {
         xhr.setRequestHeader(name, headers[name]);
       }
@@ -2296,28 +2326,35 @@ window.Radzen = {
     var rect = el.getBoundingClientRect();
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
   },
+  outerHTML: function (arg) {
+    var el = arg instanceof Element || arg instanceof HTMLDocument
+        ? arg
+        : document.getElementById(arg);
+    return el ? el.outerHTML : '';
+  },
   endDrag: function (ref) {
     document.removeEventListener('mousemove', ref.mouseMoveHandler);
     document.removeEventListener('mouseup', ref.mouseUpHandler);
     document.removeEventListener('touchmove', ref.touchMoveHandler)
     document.removeEventListener('touchend', ref.mouseUpHandler);
   },
-  startColumnReorder: function(id) {
+  startColumnReorder: function(id, gridId) {
+      var grid = document.getElementById(gridId);
       var el = document.getElementById(id + '-drag');
-      var cell = el.parentNode.parentNode;
+      Radzen[id + 'cell'] = el.parentNode.parentNode;
       var visual = document.createElement("th");
-      visual.className = cell.className + ' rz-column-draggable';
-      visual.style = cell.style;
+      visual.className = Radzen[id + 'cell'].className + ' rz-column-draggable';
+      visual.style = Radzen[id + 'cell'].style;
       visual.style.display = 'none';
       visual.style.position = 'absolute';
-      visual.style.height = cell.offsetHeight + 'px';
-      visual.style.width = cell.offsetWidth + 'px';
+      visual.style.height = Radzen[id + 'cell'].offsetHeight + 'px';
+      visual.style.width = Radzen[id + 'cell'].offsetWidth + 'px';
       visual.style.zIndex = 2000;
-      visual.innerHTML = cell.firstChild.outerHTML;
+      visual.innerHTML = Radzen[id + 'cell'].firstChild.outerHTML;
       visual.id = id + 'visual';
       document.body.appendChild(visual);
 
-      var resizers = cell.parentNode.querySelectorAll('.rz-column-resizer');
+      var resizers = Radzen[id + 'cell'].parentNode.querySelectorAll('.rz-column-resizer');
       for (let i = 0; i < resizers.length; i++) {
           resizers[i].style.display = 'none';
       }
@@ -2326,16 +2363,26 @@ window.Radzen = {
           var el = document.getElementById(id + 'visual');
           if (el) {
               document.body.removeChild(el);
-              Radzen[id + 'end'] = null;
-              Radzen[id + 'move'] = null;
-              var resizers = cell.parentNode.querySelectorAll('.rz-column-resizer');
+              var resizers = Radzen[id + 'cell'].parentNode.querySelectorAll('.rz-column-resizer');
               for (let i = 0; i < resizers.length; i++) {
                   resizers[i].style.display = 'block';
               }
           }
+
+          grid.removeEventListener('mousemove', Radzen[id + 'move']);
+          grid.removeEventListener('click', Radzen[id + 'end']);
+          document.removeEventListener('mouseup', Radzen[id + 'end']);
+          document.removeEventListener('touchend', Radzen[id + 'end']);
+
+          Radzen[id + 'end'] = null;
+          Radzen[id + 'move'] = null;
       }
-      document.removeEventListener('click', Radzen[id + 'end']);
-      document.addEventListener('click', Radzen[id + 'end']);
+      grid.removeEventListener('click', Radzen[id + 'end']);
+      grid.addEventListener('click', Radzen[id + 'end']);
+      document.removeEventListener('mouseup', Radzen[id + 'end']);
+      document.addEventListener('mouseup', Radzen[id + 'end']);
+      document.removeEventListener('touchend', Radzen[id + 'end']);
+      document.addEventListener('touchend', Radzen[id + 'end'], { passive: true });
 
       Radzen[id + 'move'] = function (e) {
           var el = document.getElementById(id + 'visual');
@@ -2354,8 +2401,8 @@ window.Radzen = {
               el.style.left = e.clientX + scrollLeft + 10 + 'px';
           }
       }
-      document.removeEventListener('mousemove', Radzen[id + 'move']);
-      document.addEventListener('mousemove', Radzen[id + 'move']);
+      grid.removeEventListener('mousemove', Radzen[id + 'move']);
+      grid.addEventListener('mousemove', Radzen[id + 'move']);
   },
   stopColumnResize: function (id, grid, columnIndex) {
     var el = document.getElementById(id + '-resizer');

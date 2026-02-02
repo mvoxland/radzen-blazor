@@ -15,7 +15,13 @@ public class GroupRowRenderEventArgs
     /// <summary>
     /// Gets the data item which the current row represents.
     /// </summary>
-    public Group Group { get; internal set; }
+    public Group? Group { get; internal set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this group row is expandable.
+    /// </summary>
+    /// <value><c>true</c> if expandable; otherwise, <c>false</c>.</value>
+    public bool Expandable { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether this group row is expanded.
