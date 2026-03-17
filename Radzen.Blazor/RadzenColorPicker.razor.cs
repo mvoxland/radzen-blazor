@@ -43,6 +43,13 @@ namespace Radzen.Blazor
         public string ToggleAriaLabel { get; set; } = "Toggle";
 
         /// <summary>
+        /// Gets or sets the popup aria label text.
+        /// </summary>
+        /// <value>The popup aria label text.</value>
+        [Parameter]
+        public string PopupAriaLabel { get; set; } = "Color picker";
+
+        /// <summary>
         /// Gets or sets the open callback.
         /// </summary>
         /// <value>The open callback.</value>
@@ -113,6 +120,7 @@ namespace Radzen.Blazor
         public string ButtonText { get; set; } = "OK";
 
         Popup Popup { get; set; } = default!;
+        bool isPopupOpen;
 
         internal event EventHandler<string>? SelectedColorChanged;
 
@@ -381,12 +389,19 @@ namespace Radzen.Blazor
 
         async Task OnClosePopup()
         {
+            isPopupOpen = false;
             if (ShowButton)
             {
                 SetInitialValue();
             }
 
             await Close.InvokeAsync(null);
+        }
+
+        async Task OnPopupOpen()
+        {
+            isPopupOpen = true;
+            await Open.InvokeAsync(null);
         }
 
         /// <summary>
@@ -587,6 +602,7 @@ namespace Radzen.Blazor
         }
 
         bool preventKeyPress;
+        bool stopKeypressPropagation;
         async Task OnKeyPress(KeyboardEventArgs args, Task task)
         {
             var key = args.Code != null ? args.Code : args.Key;
@@ -594,16 +610,19 @@ namespace Radzen.Blazor
             if (key == "Space" || key == "Enter")
             {
                 preventKeyPress = true;
+                stopKeypressPropagation = true;
 
                 await task;
             }
             else if (key == "Escape")
             {
+                stopKeypressPropagation = true;
                 await ClosePopup();
             }
             else
             {
                 preventKeyPress = false;
+                stopKeypressPropagation = false;
             }
         }
 

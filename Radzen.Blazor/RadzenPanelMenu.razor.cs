@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using Radzen.Blazor.Rendering;
 
 namespace Radzen.Blazor
 {
@@ -37,6 +38,13 @@ namespace Radzen.Blazor
         /// <value>The click callback.</value>
         [Parameter]
         public EventCallback<MenuItemEventArgs> Click { get; set; }
+
+        /// <summary>
+        /// Gets or sets the menu aria label text.
+        /// </summary>
+        /// <value>The menu aria label text.</value>
+        [Parameter]
+        public string AriaLabel { get; set; } = "Menu";
 
         /// <summary>
         /// Gets or sets a value representing the URL matching behavior.
@@ -96,7 +104,9 @@ namespace Radzen.Blazor
         /// <inheritdoc />
         protected override string GetComponentCssClass()
         {
-            return "rz-panel-menu";
+            return ClassList.Create("rz-panel-menu")
+                .Add("rz-panel-menu-stacked", DisplayStyle == MenuItemDisplayStyle.IconAndTextStacked)
+                .ToString();
         }
 
         [Inject]
@@ -106,6 +116,7 @@ namespace Radzen.Blazor
         List<RadzenPanelMenuItem>? currentItems;
 
         bool preventKeyPress;
+        bool stopKeydownPropagation;
 
         async Task OnKeyPress(KeyboardEventArgs args)
         {
@@ -116,6 +127,7 @@ namespace Radzen.Blazor
             if (key == "ArrowUp" || key == "ArrowDown")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 if (key == "ArrowUp" && focusedIndex == 0 && currentItems.Exists(i => i.ParentItem != null))
                 {
@@ -164,6 +176,7 @@ namespace Radzen.Blazor
             else if (key == "Space" || key == "Enter")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 if (focusedIndex >= 0 && focusedIndex < currentItems.Count)
                 {
@@ -196,6 +209,7 @@ namespace Radzen.Blazor
             else
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
             }
 
             if (preventKeyPress)

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using System;
@@ -89,6 +89,21 @@ namespace Radzen.Blazor
         /// <value>The change event callback receiving the selected tab index.</value>
         [Parameter]
         public EventCallback<int> Change { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the user can reorder tabs by dragging and dropping.
+        /// When enabled, tab headers become draggable and can be rearranged by the user.
+        /// </summary>
+        /// <value><c>true</c> if tab reordering is allowed; otherwise, <c>false</c>. Default is <c>false</c>.</value>
+        [Parameter]
+        public bool AllowReorder { get; set; }
+
+        /// <summary>
+        /// Gets or sets the callback invoked when tabs are reordered via drag and drop.
+        /// Provides a <see cref="TabsReorderEventArgs"/> with the old and new index of the moved tab.
+        /// </summary>
+        [Parameter]
+        public EventCallback<TabsReorderEventArgs> Reorder { get; set; }
 
         /// <summary>
         /// Gets or sets the render fragment containing RadzenTabsItem components that define the tabs.
@@ -191,6 +206,8 @@ namespace Radzen.Blazor
                 await Change.InvokeAsync(selectedIndex);
 
                 await SelectedIndexChanged.InvokeAsync(selectedIndex);
+
+                await Element.FocusAsync(preventScroll: true);
             }
 
             StateHasChanged();
@@ -294,6 +311,8 @@ namespace Radzen.Blazor
                 await Change.InvokeAsync(selectedIndex);
                 await SelectedIndexChanged.InvokeAsync(selectedIndex);
                 shouldRender = true;
+
+                await Element.FocusAsync(preventScroll: true);
             }
         }
 
@@ -304,6 +323,15 @@ namespace Radzen.Blazor
 
         internal int focusedIndex = -1;
         bool preventKeyPress = true;
+        bool stopKeydownPropagation;
+
+        bool stopGuardKeydownPropagation = true;
+        void OnGuardKeyDown(KeyboardEventArgs args)
+        {
+            var key = args.Code ?? args.Key;
+            stopGuardKeydownPropagation = key != "Escape";
+        }
+
         async Task OnKeyPress(KeyboardEventArgs args)
         {
             var key = args.Code != null ? args.Code : args.Key;
@@ -315,18 +343,21 @@ namespace Radzen.Blazor
             if (key == "ArrowLeft" || key == "ArrowRight")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 focusedIndex = Math.Clamp(focusedIndex + (key == "ArrowLeft" ? -1 : 1), 0, tabs.Where(t => HasInvisibleBefore(item) ? true : t.Visible).Count() - 1);
             }
             else if (key == "Home" || key == "End")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 focusedIndex = key == "Home" ? 0 : tabs.Where(t => HasInvisibleBefore(item) ? true : t.Visible).Count() - 1;
             }
             else if (key == "Space" || key == "Enter")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 if (focusedIndex >= 0 && focusedIndex < tabs.Where(t => HasInvisibleBefore(item) ? true : t.Visible).Count())
                 {
@@ -336,6 +367,7 @@ namespace Radzen.Blazor
             else
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
             }
         }
         internal bool IsFocused(RadzenTabsItem item)
@@ -346,6 +378,73 @@ namespace Radzen.Blazor
         internal bool HasInvisibleBefore(RadzenTabsItem item)
         {
             return tabs.Take(tabs.IndexOf(item)).Any(t => !t.Visible);
+        }
+
+        internal RadzenTabsItem? draggedTab;
+        internal RadzenTabsItem? dragOverTab;
+
+        internal void OnTabDragStart(RadzenTabsItem tab)
+        {
+            draggedTab = tab;
+        }
+
+        internal void OnTabDragOver(RadzenTabsItem tab)
+        {
+            dragOverTab = tab;
+        }
+
+        internal void OnTabDragEnd()
+        {
+            draggedTab = null;
+            dragOverTab = null;
+        }
+
+        internal async Task OnTabDrop(RadzenTabsItem tab)
+        {
+            if (draggedTab == null || draggedTab == tab)
+            {
+                return;
+            }
+
+            var oldIndex = tabs.IndexOf(draggedTab);
+            var newIndex = tabs.IndexOf(tab);
+
+            if (oldIndex < 0 || newIndex < 0)
+            {
+                return;
+            }
+
+            tabs.RemoveAt(oldIndex);
+            tabs.Insert(newIndex, draggedTab);
+
+            // Adjust selectedIndex to follow the selected tab
+            if (selectedIndex == oldIndex)
+            {
+                selectedIndex = newIndex;
+            }
+            else if (oldIndex < selectedIndex && newIndex >= selectedIndex)
+            {
+                selectedIndex--;
+            }
+            else if (oldIndex > selectedIndex && newIndex <= selectedIndex)
+            {
+                selectedIndex++;
+            }
+
+            SetFocusedIndex();
+
+            await Reorder.InvokeAsync(new TabsReorderEventArgs { OldIndex = oldIndex, NewIndex = newIndex });
+            await SelectedIndexChanged.InvokeAsync(selectedIndex);
+
+            draggedTab = null;
+            dragOverTab = null;
+
+            StateHasChanged();
+        }
+
+        internal bool IsDragOver(RadzenTabsItem tab)
+        {
+            return dragOverTab == tab && draggedTab != tab;
         }
     }
 }

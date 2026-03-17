@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Radzen.Blazor.Rendering;
 using System;
@@ -332,9 +332,27 @@ namespace Radzen.Blazor
             StateHasChanged();
         }
 
+        async Task OnItemKeyDown(KeyboardEventArgs args, RadzenCheckBoxListItem<TValue> item)
+        {
+            var key = args.Code != null ? args.Code : args.Key;
+            if (key == "Enter" || key == "Space")
+            {
+                await SelectItem(item);
+            }
+        }
+
         bool focused;
         int focusedIndex = -1;
         bool preventKeyPress = true;
+        bool stopKeydownPropagation;
+
+        bool stopGuardKeydownPropagation = true;
+        void OnGuardKeyDown(KeyboardEventArgs args)
+        {
+            var key = args.Code ?? args.Key;
+            stopGuardKeydownPropagation = key != "Escape";
+        }
+
         async Task OnKeyPress(KeyboardEventArgs args)
         {
             var key = args.Code != null ? args.Code : args.Key;
@@ -347,6 +365,7 @@ namespace Radzen.Blazor
                 (Orientation == Orientation.Vertical && (key == "ArrowUp" || key == "ArrowDown")))
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
                 var direction = key == "ArrowLeft" || key == "ArrowUp" ? -1 : 1;
 
                 focusedIndex = Math.Clamp(focusedIndex + direction, 0, allItems.FindLastIndex(t => t.Visible && !t.Disabled));
@@ -359,12 +378,14 @@ namespace Radzen.Blazor
             else if (key == "Home" || key == "End")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 focusedIndex = key == "Home" ? 0 : allItems.Where(t => HasInvisibleBefore(item) ? true : t.Visible).Count() - 1;
             }
             else if (key == "Space" || key == "Enter")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 if (focusedIndex >= 0 && focusedIndex < allItems.Where(t => HasInvisibleBefore(item) ? true : t.Visible).Count())
                 {
@@ -374,6 +395,7 @@ namespace Radzen.Blazor
             else
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
             }
         }
 

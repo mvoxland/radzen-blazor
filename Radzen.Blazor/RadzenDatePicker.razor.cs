@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
@@ -69,6 +69,41 @@ namespace Radzen.Blazor
         /// <value>The toggle popup aria label text.</value>
         [Parameter]
         public string ToggleAriaLabel { get; set; } = "Toggle";
+
+        /// <summary>
+        /// Gets or sets the popup aria label text.
+        /// </summary>
+        /// <value>The popup aria label text.</value>
+        [Parameter]
+        public string PopupAriaLabel { get; set; } = "Date picker";
+
+        /// <summary>
+        /// Gets or sets the clear button aria label text.
+        /// </summary>
+        /// <value>The clear button aria label text.</value>
+        [Parameter]
+        public string ClearAriaLabel { get; set; } = "Clear";
+
+        /// <summary>
+        /// Gets or sets the hour input aria label text.
+        /// </summary>
+        /// <value>The hour input aria label text.</value>
+        [Parameter]
+        public string HourAriaLabel { get; set; } = "Hour";
+
+        /// <summary>
+        /// Gets or sets the minutes input aria label text.
+        /// </summary>
+        /// <value>The minutes input aria label text.</value>
+        [Parameter]
+        public string MinutesAriaLabel { get; set; } = "Minutes";
+
+        /// <summary>
+        /// Gets or sets the seconds input aria label text.
+        /// </summary>
+        /// <value>The seconds input aria label text.</value>
+        [Parameter]
+        public string SecondsAriaLabel { get; set; } = "Seconds";
 
         /// <summary>
         /// Gets or sets the OK button aria label text.
@@ -171,10 +206,19 @@ namespace Radzen.Blazor
             seconds = Math.Max(Math.Min(v, 59), 0);
         }
 
+        DateTime? _valueBeforeTimeEdit;
+        bool _hasUncommittedTimeChange;
+
         async Task UpdateValueFromTime(DateTime newValue)
         {
             if (ShowTimeOkButton)
             {
+                if (!_hasUncommittedTimeChange)
+                {
+                    _valueBeforeTimeEdit = _dateTimeValue;
+                    _hasUncommittedTimeChange = true;
+                }
+
                 DateTimeValue = newValue;
                 CurrentDate = newValue;
             }
@@ -184,6 +228,47 @@ namespace Radzen.Blazor
                 CurrentDate = newValue;
                 await OnChange();
             }
+        }
+
+        void RevertUncommittedTimeChange()
+        {
+            if (!ShowTimeOkButton || !_hasUncommittedTimeChange) return;
+
+            _hasUncommittedTimeChange = false;
+
+            if (_valueBeforeTimeEdit.HasValue)
+            {
+                _dateTimeValue = _valueBeforeTimeEdit;
+                _value = ConvertToTValue(_dateTimeValue);
+            }
+            else
+            {
+                _dateTimeValue = null;
+                _value = null;
+            }
+
+            _currentDate = default(DateTime);
+            hour = null;
+            minutes = null;
+            seconds = null;
+        }
+
+        /// <summary>
+        /// Called from JavaScript when the popup is closed (e.g. by clicking outside) in Initial render mode.
+        /// </summary>
+        [JSInvokable("OnPopupClose")]
+        public void OnPopupClose()
+        {
+            RevertUncommittedTimeChange();
+            contentStyle = "display:none;";
+            StateHasChanged();
+        }
+
+        void OnPopupCloseFromEvent()
+        {
+            RevertUncommittedTimeChange();
+            contentStyle = "display:none;";
+            StateHasChanged();
         }
 
         async Task UpdateHour(int v)
@@ -221,7 +306,7 @@ namespace Radzen.Blazor
             await UpdateValueFromTime(newValue);
         }
 
-        async Task OkClick(bool shouldClose = true)
+        async Task OnOkClick(bool shouldClose = true, bool fromOkButton = false)
         {
             // Prevent single-value change path in Multiple mode
             if (Multiple)
@@ -239,13 +324,22 @@ namespace Radzen.Blazor
                     await UpdateValueFromSelectedDates(date);
                 }
 
+                _hasUncommittedTimeChange = false;
+
                 if (shouldClose)
                 {
                     Close();
                 }
 
+                if (fromOkButton && OkClick.HasDelegate)
+                {
+                    await OkClick.InvokeAsync(DateTimeValue);
+                }
+
                 return;
             }
+
+            _hasUncommittedTimeChange = false;
 
             if (shouldClose)
             {
@@ -279,6 +373,11 @@ namespace Radzen.Blazor
                 Value = date;
 
                 await OnChange();
+
+                if (fromOkButton && OkClick.HasDelegate)
+                {
+                    await OkClick.InvokeAsync(DateTimeValue);
+                }
 
                 if (monthDropDown != null)
                 {
@@ -321,13 +420,11 @@ namespace Radzen.Blazor
 
             UpdateYearsAndMonths(Min, Max);
 
-#if NET6_0_OR_GREATER
             if (typeof(TValue) == typeof(TimeOnly) || typeof(TValue) == typeof(TimeOnly?))
             {
                 TimeOnly = true;
                 ShowTime = true;
             }
-#endif
         }
 
         void UpdateYearsAndMonths(DateTime? min, DateTime? max)
@@ -453,6 +550,15 @@ namespace Radzen.Blazor
             return args;
         }
 
+        async Task OnDayKeyDown(KeyboardEventArgs args, DateTime date, DateRenderEventArgs dateArgs)
+        {
+            var key = args.Code != null ? args.Code : args.Key;
+            if ((key == "Enter" || key == "Space") && !Disabled && !dateArgs.Disabled)
+            {
+                await SetDay(date);
+            }
+        }
+
         /// <summary>
         /// Gets or sets the kind of DateTime bind to control
         /// </summary>
@@ -489,7 +595,7 @@ namespace Radzen.Blazor
                         }
                         else if (value is IEnumerable<DateTime> dtEnum)
                         {
-                            selectedDates = dtEnum.Where(d => d != default(DateTime))
+                            selectedDates = dtEnum.Where(d => d != default(DateTime) && d != DateTime.MaxValue)
                                 .Select(d => DateTime.SpecifyKind(d.Date, Kind))
                                 .Distinct()
                                 .OrderBy(d => d)
@@ -497,10 +603,9 @@ namespace Radzen.Blazor
                             _value = dtEnum;
                             _dateTimeValue = selectedDates.LastOrDefault();
                         }
-#if NET6_0_OR_GREATER
                         else if (value is IEnumerable<DateTime?> ndtEnum)
                         {
-                            selectedDates = ndtEnum.Where(d => d.HasValue && d.Value != default(DateTime))
+                            selectedDates = ndtEnum.Where(d => d.HasValue && d.Value != default(DateTime) && d.Value != DateTime.MaxValue)
                                 .Select(d => DateTime.SpecifyKind(d!.Value.Date, Kind))
                                 .Distinct()
                                 .OrderBy(d => d)
@@ -508,19 +613,6 @@ namespace Radzen.Blazor
                             _value = ndtEnum;
                             _dateTimeValue = selectedDates.LastOrDefault();
                         }
-#else
-                        else if (value is IEnumerable<System.Nullable<DateTime>> ndtEnum)
-                        {
-                            selectedDates = ndtEnum.Where(d => d.HasValue && d.Value != default(DateTime))
-                                .Select(d => DateTime.SpecifyKind(d.Value.Date, Kind))
-                                .Distinct()
-                                .OrderBy(d => d)
-                                .ToList();
-                            _value = ndtEnum;
-                            _dateTimeValue = selectedDates.LastOrDefault();
-                        }
-#endif
-#if NET6_0_OR_GREATER
                         else if (value is IEnumerable<DateOnly> doEnum)
                         {
                             selectedDates = doEnum.Select(d => d.ToDateTime(System.TimeOnly.MinValue, Kind).Date)
@@ -530,7 +622,6 @@ namespace Radzen.Blazor
                             _value = doEnum;
                             _dateTimeValue = selectedDates.LastOrDefault();
                         }
-#endif
                         else if (value is IEnumerable<DateTimeOffset?> dtoEnum)
                         {
                             selectedDates = dtoEnum.Where(o => o.HasValue)
@@ -556,7 +647,6 @@ namespace Radzen.Blazor
                             _value = dtoEnum;
                             _dateTimeValue = selectedDates.LastOrDefault();
                         }
-#if NET6_0_OR_GREATER
                         else if (value is IEnumerable<DateOnly?> doNullableEnum)
                         {
                             selectedDates = doNullableEnum.Where(d => d.HasValue)
@@ -579,8 +669,7 @@ namespace Radzen.Blazor
                             _value = toNullableEnum;
                             _dateTimeValue = selectedDates.LastOrDefault();
                         }
-#endif
-                        else if (value is DateTime dt && dt != default(DateTime))
+                        else if (value is DateTime dt && dt != default(DateTime) && dt != DateTime.MaxValue)
                         {
                             selectedDates = new List<DateTime> { DateTime.SpecifyKind(dt.Date, Kind) };
                             _value = selectedDates;
@@ -617,11 +706,10 @@ namespace Radzen.Blazor
                         }
                         else
                         {
-                            if (value is DateTime dateTime && dateTime != default(DateTime))
+                            if (value is DateTime dateTime && dateTime != default(DateTime) && dateTime != DateTime.MaxValue)
                             {
                                 _dateTimeValue = DateTime.SpecifyKind(dateTime, Kind);
                             }
-#if NET6_0_OR_GREATER
                             else if (value is DateOnly dateOnly)
                             {
                                 _dateTimeValue = dateOnly.ToDateTime(System.TimeOnly.MinValue, Kind);
@@ -631,7 +719,6 @@ namespace Radzen.Blazor
                                 _dateTimeValue = new DateTime(CurrentDate.Year, CurrentDate.Month, CurrentDate.Day, timeOnly.Hour, timeOnly.Minute, timeOnly.Second, timeOnly.Millisecond, Kind);
                                 _currentDate = _dateTimeValue.Value;
                             }
-#endif
                             else
                             {
                                 _dateTimeValue = null;
@@ -646,7 +733,6 @@ namespace Radzen.Blazor
 
         private static object? ConvertToTValue(object? value)
         {
-#if NET6_0_OR_GREATER
             var typeofTValue = typeof(TValue);
             if (value is DateTime dt)
             {
@@ -661,7 +747,6 @@ namespace Radzen.Blazor
                     return (TValue)value;
                 }
             }
-#endif
             return value;
         }
 
@@ -674,6 +759,7 @@ namespace Radzen.Blazor
                 if (_currentDate == default(DateTime))
                 {
                     _currentDate = HasValue ? DateTimeValue!.Value : InitialViewDate ?? DateTime.Today;
+                    FocusedDate = _currentDate;
                 }
                 return _currentDate;
             }
@@ -743,7 +829,7 @@ namespace Radzen.Blazor
         {
             get
             {
-                return Multiple ? selectedDates.Count > 0 : (DateTimeValue.HasValue && DateTimeValue != default(DateTime));
+                return Multiple ? selectedDates.Count > 0 : (DateTimeValue.HasValue && DateTimeValue != default(DateTime) && DateTimeValue != DateTime.MaxValue);
             }
         }
 
@@ -1163,6 +1249,15 @@ namespace Radzen.Blazor
         public EventCallback<DateTime?> Change { get; set; }
 
         /// <summary>
+        /// Gets or sets the OK click callback. Fires only when the user clicks the OK button
+        /// (visible when <see cref="ShowTimeOkButton"/> is <c>true</c>), allowing developers to
+        /// distinguish between intermediate day-selection changes and the final user confirmation.
+        /// </summary>
+        /// <value>The OK click callback.</value>
+        [Parameter]
+        public EventCallback<DateTime?> OkClick { get; set; }
+
+        /// <summary>
         /// Gets or sets the value changed callback.
         /// </summary>
         /// <value>The value changed callback.</value>
@@ -1193,6 +1288,8 @@ namespace Radzen.Blazor
         {
             if (Disabled || ReadOnly || Inline)
                 return;
+
+            RevertUncommittedTimeChange();
 
             if (PopupRenderMode == PopupRenderMode.OnDemand)
             {
@@ -1286,7 +1383,7 @@ namespace Radzen.Blazor
             else if (ShowTimeOkButton)
             {
                 CurrentDate = new DateTime(newValue.Year, newValue.Month, newValue.Day, CurrentDate.Hour, CurrentDate.Minute, CurrentDate.Second);
-                await OkClick(!ShowTime);
+                await OnOkClick(!ShowTime);
             }
             else
             {
@@ -1341,18 +1438,10 @@ namespace Radzen.Blazor
                 }
                 newValue = list;
             }
-#if NET6_0_OR_GREATER
             else if (typeof(IEnumerable<DateTime?>).IsAssignableFrom(typeofTValue))
             {
                 newValue = selectedDates.Select(d => (DateTime?)d).ToList();
             }
-#else
-            else if (typeof(System.Collections.Generic.IEnumerable<System.Nullable<DateTime>>).IsAssignableFrom(typeofTValue))
-            {
-                newValue = selectedDates.Select(d => (DateTime?)d).ToList();
-            }
-#endif
-#if NET6_0_OR_GREATER
             else if (typeof(IEnumerable<DateOnly>).IsAssignableFrom(typeofTValue))
             {
                 newValue = selectedDates.Select(d => DateOnly.FromDateTime(d)).ToList();
@@ -1365,7 +1454,6 @@ namespace Radzen.Blazor
             {
                 newValue = selectedDates.Select(d => (TimeOnly?)new TimeOnly(d.Hour, d.Minute, d.Second, d.Millisecond)).ToList();
             }
-#endif
             else
             {
                 newValue = selectedDates.ToList();
@@ -1482,7 +1570,7 @@ namespace Radzen.Blazor
 
             if (Visible && !Disabled && !ReadOnly && !Inline && PopupRenderMode == PopupRenderMode.Initial && JSRuntime != null)
             {
-                await JSRuntime.InvokeVoidAsync("Radzen.createDatePicker", Element, PopupID);
+                await JSRuntime.InvokeVoidAsync("Radzen.createDatePicker", Element, PopupID, Reference, nameof(OnPopupClose));
             }
         }
 
@@ -1578,6 +1666,7 @@ namespace Radzen.Blazor
             if (key == "ArrowLeft" || key == "ArrowRight")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 FocusedDate = FocusedDate.AddDays(key == "ArrowLeft" ? -1 : 1);
                 CurrentDate = FocusedDate;
@@ -1585,6 +1674,7 @@ namespace Radzen.Blazor
             else if (key == "ArrowUp" || key == "ArrowDown")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 FocusedDate = FocusedDate.AddDays(key == "ArrowUp" ? -7 : 7);
                 CurrentDate = FocusedDate;
@@ -1592,6 +1682,7 @@ namespace Radzen.Blazor
             else if (key == "Enter" || (key == "Space" && Multiple))
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 if (!DateAttributes(FocusedDate).Disabled && !ReadOnly)
                 {
@@ -1607,6 +1698,7 @@ namespace Radzen.Blazor
             else if (key == "Escape")
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
 
                 await ClosePopup();
                 await FocusAsync();
@@ -1614,6 +1706,7 @@ namespace Radzen.Blazor
             else if (key == "Tab")
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
 
                 await ClosePopup();
                 await FocusAsync();
@@ -1621,6 +1714,7 @@ namespace Radzen.Blazor
             else
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
             }
         }
 
@@ -1643,10 +1737,11 @@ namespace Radzen.Blazor
             if (args.AltKey && key == "ArrowDown")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 if (PopupRenderMode == PopupRenderMode.Initial && JSRuntime != null)
                 {
-                    await JSRuntime.InvokeVoidAsync("Radzen.openPopup", Element, PopupID, false, null, null, null, null, null, true, true);
+                    await JSRuntime.InvokeVoidAsync("Radzen.openPopup", Element, PopupID, false, null, null, null, Reference, nameof(OnPopupClose), true, true);
                 }
                 else if (popup != null)
                 {
@@ -1657,12 +1752,14 @@ namespace Radzen.Blazor
             else if (key == "Enter")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 await TogglePopup();
             }
             else if (key == "Escape")
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
 
                 await ClosePopup();
                 await FocusAsync();
@@ -1670,6 +1767,7 @@ namespace Radzen.Blazor
             else
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
             }
         }
 
@@ -1679,7 +1777,7 @@ namespace Radzen.Blazor
 
             if (PopupRenderMode == PopupRenderMode.Initial && JSRuntime != null)
             {
-                await JSRuntime.InvokeVoidAsync("Radzen.togglePopup", Element, PopupID, false, null, null, true, true);
+                await JSRuntime.InvokeVoidAsync("Radzen.togglePopup", Element, PopupID, false, Reference, nameof(OnPopupClose), true, true);
             }
             else if (popup != null)
             {
@@ -1690,6 +1788,8 @@ namespace Radzen.Blazor
         async Task ClosePopup()
         {
             if (Inline) return;
+
+            RevertUncommittedTimeChange();
 
             if (PopupRenderMode == PopupRenderMode.Initial && JSRuntime != null)
             {
@@ -1702,6 +1802,7 @@ namespace Radzen.Blazor
         }
 
         bool preventKeyPress;
+        bool stopKeydownPropagation;
 
         /// <inheritdoc/>
         public async ValueTask FocusAsync()

@@ -9,14 +9,16 @@
     @for (var day = StartDate; day < EndDate; day = day.AddDays(1))
     {
         var loopDay = day;
-        <div class="rz-slot-header" @onclick=@(args => OnDayClick(@loopDay))>
+        <div class="rz-slot-header" role="button" tabindex="0"
+             @onclick=@(args => OnDayClick(@loopDay))
+             @onkeydown="@(args => OnHeaderKeyDown(args, loopDay))">
             @day.ToString(HeaderFormat, Scheduler?.Culture ?? System.Globalization.CultureInfo.CurrentCulture)
         </div>
     }
     </div>
     <div class="rz-view-content">
         <Hours Start=@StartTime End=@EndTime TimeFormat=@TimeFormat MinutesPerSlot=@MinutesPerSlot />
-        <div @ref=view class="rz-week-view-content" tabindex="0" @onkeydown="@(args => OnKeyPress(args))" @onkeydown:preventDefault="@preventKeyPress" @onkeydown:stopPropagation
+        <div @ref=view class="rz-week-view-content" tabindex="0" @onkeydown="@(args => OnKeyPress(args))" @onkeydown:preventDefault="@preventKeyPress" @onkeydown:stopPropagation="stopKeydownPropagation"
              @onfocus=@this.AsNonRenderingEventHandler(OnFocus)>
         @for (var day = StartDate; day < EndDate; day = day.AddDays(1))
         {
@@ -98,6 +100,15 @@
         }
     }
 
+    async Task OnHeaderKeyDown(KeyboardEventArgs args, DateTime day)
+    {
+        var key = args.Code != null ? args.Code : args.Key;
+        if (key == "Enter" || key == "Space")
+        {
+            await OnDayClick(day);
+        }
+    }
+
     IDictionary<string, object> Attributes(DateTime date)
     {
         if (Scheduler == null)
@@ -112,6 +123,7 @@
     int currentAppointment = -1;
     IEnumerable<AppointmentData> currentAppointments = Enumerable.Empty<AppointmentData>();
     bool preventKeyPress;
+    bool stopKeydownPropagation;
 
     async Task OnKeyPress(KeyboardEventArgs args)
     {
@@ -123,7 +135,8 @@
 
         if (arrow && !currentAppointments.Any())
         {
-            CurrentDate = CurrentDate.AddDays(leftup ? -1 : 1);
+            var days = leftright ? 1 : 7;
+            CurrentDate = CurrentDate.AddDays(leftup ? -days : days);
             currentAppointments = AppointmentsInSlot(CurrentDate, CurrentDate.AddDays(1));
 
             if(CurrentDate < StartDate)
@@ -137,6 +150,7 @@
             }
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (arrow && currentAppointments.Any())
         {
@@ -161,6 +175,7 @@
             }
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (key == "Enter")
         {
@@ -168,6 +183,7 @@
             await view.FocusAsync();
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (key == "Space")
         {
@@ -182,10 +198,12 @@
             }
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else
         {
             preventKeyPress = false;
+            stopKeydownPropagation = false;
         }
     }
 }

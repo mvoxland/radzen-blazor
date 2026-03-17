@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using System.Collections.Generic;
@@ -50,6 +50,13 @@ namespace Radzen.Blazor
         [Parameter]
         public bool ShowIcon { get; set; } = true;
 
+        /// <summary>
+        /// Gets or sets the toggle aria label text.
+        /// </summary>
+        /// <value>The toggle aria label text.</value>
+        [Parameter]
+        public string ToggleAriaLabel { get; set; } = "Profile menu";
+
         string contentStyle = "display:none;position:absolute;z-index:1;";
 
         /// <summary>
@@ -84,6 +91,7 @@ namespace Radzen.Blazor
         internal int focusedIndex = -1;
 
         bool preventKeyPress = true;
+        bool stopKeydownPropagation;
         async Task OnKeyPress(KeyboardEventArgs args)
         {
             var key = args.Code != null ? args.Code : args.Key;
@@ -91,12 +99,14 @@ namespace Radzen.Blazor
             if (key == "ArrowUp" || key == "ArrowDown")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 focusedIndex = Math.Clamp(focusedIndex + (key == "ArrowUp" ? -1 : 1), 0, items.Count - 1);
             }
             else if (key == "Space" || key == "Enter")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 if (!Collapsed && focusedIndex >= 0 && focusedIndex < items.Count)
                 {
@@ -124,12 +134,30 @@ namespace Radzen.Blazor
             else if (key == "Escape")
             {
                 preventKeyPress = true;
+                stopKeydownPropagation = true;
 
                 Close();
             }
             else
             {
                 preventKeyPress = false;
+                stopKeydownPropagation = false;
+            }
+        }
+
+        bool stopGuardKeydownPropagation = true;
+        void OnGuardKeyDown(KeyboardEventArgs args)
+        {
+            var key = args.Code ?? args.Key;
+            stopGuardKeydownPropagation = key != "Escape";
+        }
+
+        async Task OnToggleKeyDown(KeyboardEventArgs args)
+        {
+            var key = args.Code != null ? args.Code : args.Key;
+            if (key == "Space" || key == "Enter")
+            {
+                await Toggle(new MouseEventArgs());
             }
         }
 

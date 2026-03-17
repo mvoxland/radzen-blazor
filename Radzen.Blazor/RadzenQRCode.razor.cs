@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Radzen.Blazor.Rendering;
+using System;
 using System.Globalization;
 using System.Threading.Tasks;
 
@@ -151,10 +153,40 @@ namespace Radzen.Blazor
         [Parameter] public double ImageBackgroundOpacity { get; set; } = 1.0;
 
         /// <summary>
+        /// Gets or sets the quiet zone (margin) size in QR code modules around the QR code.
+        /// The quiet zone helps scanners detect the QR code boundaries. The QR standard recommends 4 modules.
+        /// Set to 0 to remove the margin entirely.
+        /// </summary>
+        /// <value>The quiet zone size in modules. Default is 4.</value>
+        [Parameter] public int QuietZone { get; set; } = 4;
+
+        /// <summary>
         /// Gets the component CSS class.
         /// </summary>
         protected override string GetComponentCssClass() => "rz-qrcode";
         private static string Format(double v) => v.ToString(CultureInfo.InvariantCulture);
+        private static (string Color, double Opacity) GetSvgFillParts(string? color)
+        {
+            if (string.IsNullOrWhiteSpace(color))
+            {
+                return ("none", 1);
+            }
+
+            if (string.Equals(color, "transparent", StringComparison.OrdinalIgnoreCase))
+            {
+                return ("rgb(0, 0, 0)", 0);
+            }
+
+            var rgb = RGB.Parse(color);
+            if (rgb == null)
+            {
+                return (color, 1);
+            }
+
+            var opacity = Math.Clamp(rgb.Alpha, 0, 1);
+            var fill = $"rgb({Format(rgb.Red)}, {Format(rgb.Green)}, {Format(rgb.Blue)})";
+            return (fill, opacity);
+        }
         private static bool IsFinderCell(int r, int c, int n)
         {
             bool inTL = r < 7 && c < 7;

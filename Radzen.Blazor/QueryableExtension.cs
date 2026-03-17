@@ -1,4 +1,4 @@
-﻿using Radzen;
+using Radzen;
 using Radzen.Blazor;
 using System;
 using System.Collections;
@@ -138,22 +138,37 @@ namespace Radzen
             ArgumentNullException.ThrowIfNull(properties);
 
             var parameter = Expression.Parameter(source.ElementType, "x");
+            var expressions = properties
+                .Select(p => Expression.Lambda<Func<T, object>>(Expression.Convert(GetNestedPropertyExpression(parameter, p), typeof(object)), parameter))
+                .ToArray();
 
-            return GroupByMany(source,
-                properties.Select(p => Expression.Lambda<Func<T, object>>(Expression.Convert(GetNestedPropertyExpression(parameter, p), typeof(object)), parameter).Compile()).ToArray(),
-                    0);
+            return GroupByMany(source, expressions, 0);
         }
 
-        private static IQueryable<GroupResult> GroupByMany<T>(IEnumerable<T> source, Func<T, object>[] lambdas, int index)
+        private static IQueryable<GroupResult> GroupByMany<T>(IQueryable<T> source, Expression<Func<T, object>>[] expressions, int index)
         {
-            return source.GroupBy(lambdas[index]).Select(
-                g => new GroupResult
-                {
-                    Key = g.Key,
-                    Count = g.Count(),
-                    Items = g,
-                    Subgroups = index < lambdas.Length - 1 ? GroupByMany(g, lambdas, index + 1) : null
-                }).AsQueryable();
+            if (index < expressions.Length - 1)
+            {
+                // Intermediate level: use IQueryable GroupBy, then AsEnumerable to allow recursive C# calls
+                return source.GroupBy(expressions[index])
+                    .AsEnumerable()
+                    .Select(g => new GroupResult
+                    {
+                        Key = g.Key,
+                        Count = g.Count(),
+                        Items = null,
+                        Subgroups = GroupByMany(g.AsQueryable(), expressions, index + 1)
+                    }).AsQueryable();
+            }
+
+            // Last (or only) level: pure IQueryable chain, no compilation or materialization
+            return source.GroupBy(expressions[index]).Select(g => new GroupResult
+            {
+                Key = g.Key,
+                Count = g.Count(),
+                Items = g,
+                Subgroups = null
+            });
         }
 
         internal static string RemoveVariableReference(string expression)
@@ -364,7 +379,8 @@ namespace Radzen
             var methodInfo = typeof(Queryable)
                 .GetTypeInfo()
                 .GetDeclaredMethods(nameof(Queryable.Min))
-                .First(mi => mi.GetParameters().Length == 1 && mi.ReturnType == type);
+                .First(mi => mi.IsGenericMethod && mi.GetParameters().Length == 1)
+                .MakeGenericMethod(type);
 
             return source.Provider.Execute(Expression.Call(null, methodInfo, source.Expression))!;
         }
@@ -380,12 +396,13 @@ namespace Radzen
             ArgumentNullException.ThrowIfNull(source);
             ArgumentNullException.ThrowIfNull(type);
 
-            var maxMethod = typeof(Queryable).GetTypeInfo().GetDeclaredMethods(nameof(Queryable.Max)).FirstOrDefault(mi => mi.GetParameters().Length == 1 && mi.ReturnType == type);
-            if (maxMethod == null)
-            {
-                throw new InvalidOperationException($"Max method not found for type {type}");
-            }
-            return source.Provider.Execute(Expression.Call(null, maxMethod, source.Expression))!;
+            var methodInfo = typeof(Queryable)
+                .GetTypeInfo()
+                .GetDeclaredMethods(nameof(Queryable.Max))
+                .First(mi => mi.IsGenericMethod && mi.GetParameters().Length == 1)
+                .MakeGenericMethod(type);
+
+            return source.Provider.Execute(Expression.Call(null, methodInfo, source.Expression))!;
         }
 
         /// <summary>
@@ -478,79 +495,156 @@ namespace Radzen
 
         internal static Expression GetNestedPropertyExpression(Expression expression, string property, Type? type = null)
         {
+            ArgumentNullException.ThrowIfNull(expression);
+            if (string.IsNullOrWhiteSpace(property)) return Expression.Constant(null, typeof(object));
+
             var parts = property.Split(separator, 2);
-            string currentPart = parts[0];
+            var currentPart = parts[0];
+
+            static Expression BuildIsNull(Expression expr)
+            {
+                var underlying = Nullable.GetUnderlyingType(expr.Type);
+                if (underlying != null)
+                {
+                    return Expression.Not(Expression.Property(expr, "HasValue"));
+                }
+
+                if (!expr.Type.IsValueType)
+                {
+                    return Expression.Equal(expr, Expression.Constant(null, expr.Type));
+                }
+
+                return Expression.Constant(false);
+            }
+
+            static Expression UnwrapNullableIfNeeded(Expression expr)
+            {
+                return Nullable.GetUnderlyingType(expr.Type) != null
+                    ? Expression.Property(expr, "Value")
+                    : expr;
+            }
+
+            static Expression AccessMember(Expression instance, string memberName)
+            {
+                var t = instance.Type;
+
+                if (t.IsInterface)
+                {
+                    var declaring =
+                        new[] { t }.Concat(t.GetInterfaces())
+                            .FirstOrDefault(i => i.GetProperty(memberName) != null);
+
+                    if (declaring == null)
+                        throw new InvalidOperationException($"Member '{memberName}' not found on interface '{t}'.");
+
+                    return Expression.Property(instance, declaring, memberName);
+                }
+
+                try
+                {
+                    return Expression.PropertyOrField(instance, memberName);
+                }
+                catch (AmbiguousMatchException)
+                {
+                    var prop = t.GetProperty(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+                    if (prop != null) return Expression.Property(instance, prop);
+
+                    var field = t.GetField(memberName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.FlattenHierarchy);
+                    if (field != null) return Expression.Field(instance, field);
+
+                    throw;
+                }
+            }
+
+            static Expression NullPropagate(Expression parent, Expression accessed)
+            {
+                var isNull = BuildIsNull(parent);
+
+                var whenNull = Expression.Default(accessed.Type);
+
+                return Expression.Condition(isNull, whenNull, accessed);
+            }
+
+            // Skip null propagation for ParameterExpression (the root LINQ parameter is never null).
+            // Adding a null check like `x == null ? default : x.Property` on the root parameter
+            // causes EF Core to fail for keyless entity types (e.g. SQL views) because it cannot
+            // translate `==` on entities without a primary key.
+            var shouldNullPropagate = expression is not ParameterExpression;
+
             Expression member;
 
-            if (expression.Type.IsGenericType && typeof(IDictionary<,>).IsAssignableFrom(expression.Type.GetGenericTypeDefinition()) ||
-                typeof(IDictionary).IsAssignableFrom(expression.Type) || typeof(System.Data.DataRow).IsAssignableFrom(expression.Type))
+            var parentForAccess = UnwrapNullableIfNeeded(expression);
+
+            if ((parentForAccess.Type.IsGenericType && typeof(IDictionary<,>).IsAssignableFrom(parentForAccess.Type.GetGenericTypeDefinition())) ||
+                typeof(IDictionary).IsAssignableFrom(parentForAccess.Type) ||
+                typeof(System.Data.DataRow).IsAssignableFrom(parentForAccess.Type))
             {
                 var key = currentPart.Split('"')[1];
                 var typeString = currentPart.Split('(')[0];
 
-                var indexer = typeof(System.Data.DataRow).IsAssignableFrom(expression.Type) ?
-                    Expression.Property(expression, expression.Type.GetProperty("Item", new[] { typeof(string) })!, Expression.Constant(key)) :
-                        Expression.Property(expression, expression.Type.GetProperty("Item")!, Expression.Constant(key));
-                member = Expression.Convert(
-                    indexer,
-                    parts.Length > 1 ? indexer.Type : type ?? Type.GetType(typeString.EndsWith('?') ? $"System.Nullable`1[System.{typeString.TrimEnd('?')}]" : $"System.{typeString}") ?? typeof(object));
+                var indexer =
+                    typeof(System.Data.DataRow).IsAssignableFrom(parentForAccess.Type)
+                        ? Expression.Property(parentForAccess, parentForAccess.Type.GetProperty("Item", new[] { typeof(string) })!, Expression.Constant(key))
+                        : Expression.Property(parentForAccess, parentForAccess.Type.GetProperty("Item")!, Expression.Constant(key));
+
+                var targetType =
+                    parts.Length > 1
+                        ? indexer.Type
+                        : type
+                            ?? Type.GetType(
+                                typeString.EndsWith('?')
+                                    ? $"System.Nullable`1[System.{typeString.TrimEnd('?')}]"
+                                    : $"System.{typeString}"
+                            )
+                            ?? typeof(object);
+
+                member = Expression.Convert(indexer, targetType);
+
+                member = shouldNullPropagate ? NullPropagate(expression, member) : member;
             }
-            else if (currentPart.Contains('[', StringComparison.Ordinal)) // Handle array or list indexing
+
+            else if (currentPart.Contains('[', StringComparison.Ordinal))
             {
                 var indexStart = currentPart.IndexOf('[', StringComparison.Ordinal);
                 var propertyName = currentPart.Substring(0, indexStart);
                 var indexString = currentPart.Substring(indexStart + 1, currentPart.Length - indexStart - 2);
 
-                member = Expression.PropertyOrField(expression, propertyName);
-                if (int.TryParse(indexString, out int index))
+                var collection = AccessMember(parentForAccess, propertyName);
+                collection = shouldNullPropagate ? NullPropagate(expression, collection) : collection;
+
+                if (!int.TryParse(indexString, out var index))
+                    throw new ArgumentException($"Invalid index format: {indexString}");
+
+                var underlyingCollection = Nullable.GetUnderlyingType(collection.Type) != null
+                    ? Expression.Property(collection, "Value")
+                    : collection;
+
+                Expression indexed;
+                if (underlyingCollection.Type.IsArray)
                 {
-                    if (member.Type.IsArray)
-                    {
-                        member = Expression.ArrayIndex(member, Expression.Constant(index));
-                    }
-                    else if (member.Type.IsGenericType &&
-                             (member.Type.GetGenericTypeDefinition() == typeof(List<>) ||
-                              typeof(IList<>).IsAssignableFrom(member.Type.GetGenericTypeDefinition())))
-                    {
-                        var itemProperty = member.Type.GetProperty("Item");
-                        if (itemProperty != null)
-                        {
-                            member = Expression.Property(member, itemProperty, Expression.Constant(index));
-                        }
-                    }
+                    indexed = Expression.ArrayIndex(underlyingCollection, Expression.Constant(index));
                 }
                 else
                 {
-                    throw new ArgumentException($"Invalid index format: {indexString}");
+                    var itemProp = underlyingCollection.Type.GetProperty("Item");
+                    if (itemProp == null)
+                        throw new InvalidOperationException($"Type '{underlyingCollection.Type}' has no indexer 'Item'.");
+
+                    indexed = Expression.Property(underlyingCollection, itemProp, Expression.Constant(index));
                 }
-            }
-            else if (expression != null && expression.Type != null && expression.Type.IsInterface)
-            {
-                member = Expression.Property(expression,
-                    new[] { expression.Type }.Concat(expression.Type.GetInterfaces()).FirstOrDefault(t => t.GetProperty(currentPart) != null)!,
-                    currentPart
-                );
+
+                member = NullPropagate(collection, indexed);
             }
             else
             {
-            if (expression == null || string.IsNullOrEmpty(currentPart))
-            {
-                return Expression.Constant(null, typeof(object));
+                var accessed = AccessMember(parentForAccess, currentPart);
+                member = shouldNullPropagate ? NullPropagate(expression, accessed) : accessed;
             }
 
-            var p = expression.Type?.GetProperty(currentPart, BindingFlags.Public | BindingFlags.Instance);
-            member = p != null ? Expression.Property(expression, p) : Expression.PropertyOrField(expression, currentPart);
-            }
+            if (parts.Length > 1)
+                return GetNestedPropertyExpression(member, parts[1], type);
 
-            if (expression != null && expression.Type != null && expression.Type.IsValueType && Nullable.GetUnderlyingType(expression.Type) == null)
-            {
-                expression = Expression.Convert(expression, typeof(object));
-            }
-
-            return parts.Length > 1 ? GetNestedPropertyExpression(member, parts[1], type) :
-                (Nullable.GetUnderlyingType(member.Type) != null || member.Type == typeof(string)) ?
-                    expression != null ? Expression.Condition(Expression.Equal(expression, Expression.Constant(null)), Expression.Constant(null, member.Type), member) : member :
-                    member;
+            return member;
         }
 
         internal static Expression GetExpression<T>(ParameterExpression parameter, FilterDescriptor filter, FilterCaseSensitivity filterCaseSensitivity, Type type)

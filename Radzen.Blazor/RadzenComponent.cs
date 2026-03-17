@@ -213,7 +213,7 @@ namespace Radzen
             {
                 if (Visible == false)
                 {
-                    Dispose();
+                    OnBecameInvisible();
                 }
             }
         }
@@ -318,6 +318,31 @@ namespace Radzen
         internal bool disposed;
 
         /// <summary>
+        /// Called when the component becomes invisible. Cleans up JS interop resources
+        /// without full disposal so the component can become visible again.
+        /// </summary>
+        protected virtual void OnBecameInvisible()
+        {
+            if (IsJSRuntimeAvailable && JSRuntime != null && !string.IsNullOrEmpty(UniqueID))
+            {
+                if (ContextMenu.HasDelegate)
+                {
+                    JSRuntime.InvokeVoid("Radzen.removeContextMenu", UniqueID);
+                }
+
+                if (MouseEnter.HasDelegate)
+                {
+                    JSRuntime.InvokeVoid("Radzen.removeMouseEnter", UniqueID);
+                }
+
+                if (MouseLeave.HasDelegate)
+                {
+                    JSRuntime.InvokeVoid("Radzen.removeMouseLeave", UniqueID);
+                }
+            }
+        }
+
+        /// <summary>
         /// Detaches event handlers and disposes <see cref="Reference" />.
         /// </summary>
         public virtual void Dispose()
@@ -326,8 +351,6 @@ namespace Radzen
 
             debouncer?.Dispose();
             debouncer = null;
-            reference?.Dispose();
-            reference = null;
 
             if (IsJSRuntimeAvailable && JSRuntime != null && !string.IsNullOrEmpty(UniqueID))
             {
@@ -346,6 +369,9 @@ namespace Radzen
                     JSRuntime.InvokeVoid("Radzen.removeMouseLeave", UniqueID);
                 }
             }
+
+            reference?.Dispose();
+            reference = null;
         }
 
         /// <summary>

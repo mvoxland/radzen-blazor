@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using System;
@@ -93,6 +93,40 @@ namespace Radzen.Blazor
             }
 
             return false;
+        }
+
+        bool IsNextStepDisabled()
+        {
+            var nextIndex = SelectedIndex + 1;
+            while (nextIndex < steps.Count)
+            {
+                if (!steps[nextIndex].Visible)
+                {
+                    nextIndex++;
+                    continue;
+                }
+
+                break;
+            }
+
+            return nextIndex < steps.Count && steps[nextIndex].Disabled;
+        }
+
+        bool IsPrevStepDisabled()
+        {
+            var prevIndex = SelectedIndex - 1;
+            while (prevIndex >= 0 && prevIndex < steps.Count)
+            {
+                if (!steps[prevIndex].Visible)
+                {
+                    prevIndex--;
+                    continue;
+                }
+
+                break;
+            }
+
+            return prevIndex >= 0 && prevIndex < steps.Count && steps[prevIndex].Disabled;
         }
 
         /// <summary>
@@ -445,6 +479,7 @@ namespace Radzen.Blazor
         }
 
         bool preventKeyPress;
+        bool stopKeypressPropagation;
         async Task OnKeyPress(KeyboardEventArgs args, Task task)
         {
             var key = args.Code != null ? args.Code : args.Key;
@@ -452,12 +487,14 @@ namespace Radzen.Blazor
             if (key == "Space" || key == "Enter")
             {
                 preventKeyPress = true;
+                stopKeypressPropagation = true;
 
                 await task;
             }
             else
             {
                 preventKeyPress = false;
+                stopKeypressPropagation = false;
             }
         }
     }

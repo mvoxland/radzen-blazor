@@ -2,13 +2,13 @@
 @inherits DropableViewBase
 
 <div class="rz-view rz-day-view">
-    <div class="rz-view-header" @onclick=@(args => OnDayClick(@StartDate))>
+    <div class="rz-view-header" role="button" tabindex="0" @onclick=@(args => OnDayClick(@StartDate)) @onkeydown="OnHeaderKeyDown">
         <div class="rz-slot-hour-header"></div>
         <div class="rz-slot-header">
             @StartDate.ToString("ddd", Scheduler?.Culture ?? System.Globalization.CultureInfo.CurrentCulture)
         </div>
     </div>
-    <div @ref=view class="rz-view-content" tabindex="0" @onkeydown="@(args => OnKeyPress(args))" @onkeydown:preventDefault="@preventKeyPress" @onkeydown:stopPropagation
+    <div @ref=view class="rz-view-content" tabindex="0" @onkeydown="@(args => OnKeyPress(args))" @onkeydown:preventDefault="@preventKeyPress" @onkeydown:stopPropagation="stopKeydownPropagation"
          @onfocus=@this.AsNonRenderingEventHandler(OnFocus)>
         <Hours Start=@StartTime End=@EndTime TimeFormat=@TimeFormat MinutesPerSlot=@MinutesPerSlot />
         <div class="rz-slots">
@@ -86,10 +86,19 @@
         }
     }
 
+    async Task OnHeaderKeyDown(KeyboardEventArgs args)
+    {
+        var key = args.Code != null ? args.Code : args.Key;
+        if (key == "Enter" || key == "Space")
+        {
+            await OnDayClick(StartDate);
+        }
+    }
+
     IDictionary<string, object> Attributes(DateTime date)
     {
         var attributes = Scheduler?.GetSlotAttributes(date, date.AddMinutes(MinutesPerSlot), () => AppointmentsInSlot(date, date.AddMinutes(MinutesPerSlot))) ?? new Dictionary<string, object>();
-        attributes["class"] = ClassList.Create("rz-slot").Add("rz-slot-minor", (date.Minute / MinutesPerSlot) % 2 == 1).Add(attributes).ToString();
+        attributes["class"] = ClassList.Create("rz-slot").Add("rz-slot-minor", (date.Minute / MinutesPerSlot) % 2 == 1).Add("rz-state-focused", date == CurrentDate && !currentAppointments.Any()).Add(attributes).ToString();
         attributes["dropzone"] = "move";
         return attributes;
     }
@@ -98,6 +107,7 @@
     int currentAppointment = -1;
     IEnumerable<AppointmentData> currentAppointments = Enumerable.Empty<AppointmentData>();
     bool preventKeyPress;
+    bool stopKeydownPropagation;
 
     async Task OnKeyPress(KeyboardEventArgs args)
     {
@@ -110,14 +120,23 @@
         var dayEnd = CurrentDate.Date.Add(EndTime);
         currentAppointments = AppointmentsInSlot(dayStart, dayEnd);
 
-        if (arrow && currentAppointments.Any())
+        if (updown && currentAppointments.Any())
         {
-            if (updown || leftright)
+            currentAppointment = Math.Clamp(currentAppointment + (key == "ArrowUp" ? -1 : 1), 0, currentAppointments.Count() - 1);
+
+            preventKeyPress = true;
+            stopKeydownPropagation = true;
+        }
+        else if (updown && !currentAppointments.Any())
+        {
+            var newDate = CurrentDate.AddMinutes(key == "ArrowUp" ? -MinutesPerSlot : MinutesPerSlot);
+            if (newDate >= CurrentDate.Date.Add(StartTime) && newDate < CurrentDate.Date.Add(EndTime))
             {
-                currentAppointment = Math.Clamp(currentAppointment + (key == "ArrowUp" || key == "ArrowLeft" ? -1 : 1), 0, currentAppointments.Count() - 1);
+                CurrentDate = newDate;
             }
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (key == "Enter")
         {
@@ -125,6 +144,7 @@
             await view.FocusAsync();
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (key == "Space")
         {
@@ -135,10 +155,12 @@
             }
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else
         {
             preventKeyPress = false;
+            stopKeydownPropagation = false;
         }
     }
 }

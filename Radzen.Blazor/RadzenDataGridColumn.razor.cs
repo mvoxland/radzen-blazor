@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using System;
 using System.Collections;
@@ -188,76 +188,80 @@ namespace Radzen.Blazor
             if (Grid != null)
             {
                 Grid.AddColumn(this);
+                SetColumnDefaults();
+            }
+        }
 
-                var canSetFilterPropertyType = (FilterMode ?? Grid.FilterMode) == Radzen.FilterMode.CheckBoxList && FilterTemplate == null;
+        private void SetColumnDefaults()
+        {
+            var canSetFilterPropertyType = (FilterMode ?? Grid.FilterMode) == Radzen.FilterMode.CheckBoxList && FilterTemplate == null;
 
-                if (canSetFilterPropertyType)
+            if (canSetFilterPropertyType)
+            {
+                if (Type == null)
                 {
-                    if (Type == null)
-                    {
-                        var fp = GetFilterProperty();
-                        var pt = !string.IsNullOrEmpty(fp) ?
-                                PropertyAccess.GetPropertyType(typeof(TItem), fp) : typeof(object);
+                    var fp = GetFilterProperty();
+                    var pt = !string.IsNullOrEmpty(fp) ?
+                            PropertyAccess.GetPropertyType(typeof(TItem), fp) : typeof(object);
 
-                        _filterPropertyType = typeof(IEnumerable<>).MakeGenericType(pt!);
-                    }
-
-                    if (GetFilterOperator() == FilterOperator.Equals)
-                    {
-                        SetFilterOperator(FilterOperator.Contains);
-                    }
-
-                    Grid.FilterPopupRenderMode = PopupRenderMode.OnDemand;
+                    _filterPropertyType = typeof(IEnumerable<>).MakeGenericType(pt!);
                 }
 
-                var property = GetFilterProperty();
-
-                if (!string.IsNullOrEmpty(property) && Type == null)
-                {
-                    _propertyType = PropertyAccess.GetPropertyType(typeof(TItem), property);
-                }
-
-                if (!string.IsNullOrEmpty(property) && Type == null && !canSetFilterPropertyType)
-                {
-                    _filterPropertyType = _propertyType;
-                }
-
-                if (_filterPropertyType == null)
-                {
-                    _filterPropertyType = Type;
-                }
-                else if (!string.IsNullOrEmpty(Property))
-                {
-                    propertyValueGetter = PropertyAccess.Getter<TItem, object>(Property);
-                }
-
-                if (!string.IsNullOrEmpty(Property) && (typeof(TItem).IsGenericType && typeof(IDictionary<,>).IsAssignableFrom(typeof(TItem).GetGenericTypeDefinition()) ||
-                    typeof(IDictionary).IsAssignableFrom(typeof(TItem)) || typeof(System.Data.DataRow).IsAssignableFrom(typeof(TItem))))
-                {
-                    propertyValueGetter = PropertyAccess.Getter<TItem, object>(Property);
-                }
-
-                if (_filterPropertyType == typeof(string) && filterOperator != FilterOperator.Custom && filterOperator == null && _filterOperator == null)
+                if (GetFilterOperator() == FilterOperator.Equals)
                 {
                     SetFilterOperator(FilterOperator.Contains);
                 }
 
-                if (!string.IsNullOrEmpty(Property) && !string.IsNullOrEmpty(FilterProperty))
-                    UniqueID = $"{Property}.{FilterProperty}"; // To be sure the column uniqueID is unique even when filtering on sub property.
-                else
-                    UniqueID = !string.IsNullOrEmpty(Property) ? Property : FilterProperty;
-                
-                if (UseDisplayName && !string.IsNullOrEmpty(Property))
+                Grid.FilterPopupRenderMode = PopupRenderMode.OnDemand;
+            }
+
+            var property = GetFilterProperty();
+
+            if (!string.IsNullOrEmpty(property) && Type == null)
+            {
+                _propertyType = PropertyAccess.GetPropertyType(typeof(TItem), property);
+            }
+
+            if (!string.IsNullOrEmpty(property) && Type == null && !canSetFilterPropertyType)
+            {
+                _filterPropertyType = _propertyType;
+            }
+
+            if (_filterPropertyType == null)
+            {
+                _filterPropertyType = Type;
+            }
+            else if (!string.IsNullOrEmpty(Property))
+            {
+                propertyValueGetter = PropertyAccess.Getter<TItem, object>(Property);
+            }
+
+            if (!string.IsNullOrEmpty(Property) && (typeof(TItem).IsGenericType && typeof(IDictionary<,>).IsAssignableFrom(typeof(TItem).GetGenericTypeDefinition()) ||
+                typeof(IDictionary).IsAssignableFrom(typeof(TItem)) || typeof(System.Data.DataRow).IsAssignableFrom(typeof(TItem))))
+            {
+                propertyValueGetter = PropertyAccess.Getter<TItem, object>(Property);
+            }
+
+            if (_filterPropertyType == typeof(string) && filterOperator != FilterOperator.Custom && filterOperator == null && _filterOperator == null)
+            {
+                SetFilterOperator(FilterOperator.Contains);
+            }
+
+            if (!string.IsNullOrEmpty(Property) && !string.IsNullOrEmpty(FilterProperty))
+                UniqueID = $"{Property}.{FilterProperty}"; // To be sure the column uniqueID is unique even when filtering on sub property.
+            else
+                UniqueID = !string.IsNullOrEmpty(Property) ? Property : FilterProperty;
+
+            if (UseDisplayName && !string.IsNullOrEmpty(Property))
+            {
+                var propInfo = typeof(TItem).GetProperty(Property);
+                if (propInfo != null)
                 {
-                    var propInfo = typeof(TItem).GetProperty(Property);
-                    if (propInfo != null)
+                    var displayAttr = propInfo.GetCustomAttributes(typeof(DisplayAttribute), true)
+                        .FirstOrDefault() as DisplayAttribute;
+                    if (displayAttr?.Name != null)
                     {
-                        var displayAttr = propInfo.GetCustomAttributes(typeof(DisplayAttribute), true)
-                            .FirstOrDefault() as DisplayAttribute;
-                        if (displayAttr?.Name != null)
-                        {
-                            Title = displayAttr.Name;
-                        }
+                        Title = displayAttr.Name;
                     }
                 }
             }
@@ -1007,16 +1011,32 @@ namespace Radzen.Blazor
 
             if (parameters.DidParameterChange(nameof(SortOrder), SortOrder))
             {
-                sortOrder = new SortOrder?[] { parameters.GetValueOrDefault<SortOrder?>(nameof(SortOrder)) };
+                var newSortOrder = parameters.GetValueOrDefault<SortOrder?>(nameof(SortOrder));
+                sortOrder = new SortOrder?[] { newSortOrder };
 
                 if (Grid != null)
                 {
                     var descriptor = Grid.sorts.Where(d => d.Property == GetSortProperty()).FirstOrDefault();
-                    if (descriptor == null)
+                    if (newSortOrder.HasValue)
                     {
-                        Grid.sorts.Add(new SortDescriptor() { Property = GetSortProperty(), SortOrder = sortOrder.FirstOrDefault() });
-                        Grid._view = null;
+                        if (descriptor != null)
+                        {
+                            descriptor.SortOrder = newSortOrder.Value;
+                        }
+                        else
+                        {
+                            Grid.sorts.Add(new SortDescriptor() { Property = GetSortProperty(), SortOrder = newSortOrder.Value });
+                        }
                     }
+                    else
+                    {
+                        if (descriptor != null)
+                        {
+                            Grid.sorts.Remove(descriptor);
+                        }
+                    }
+                    Grid._view = null;
+                    await Grid.Reload();
                 }
             }
 
@@ -1024,25 +1044,25 @@ namespace Radzen.Blazor
             {
                 filterValue = parameters.GetValueOrDefault<object>(nameof(FilterValue));
 
-                if (FilterTemplate != null || FilterValueTemplate != null)
+                FilterValue = filterValue;
+                if (Grid != null)
                 {
-                    FilterValue = filterValue;
-                    if (Grid != null)
+                    Grid.SaveSettings();
+                    if (Grid.IsVirtualizationAllowed())
                     {
-                        Grid.SaveSettings();
-                        if (Grid.IsVirtualizationAllowed())
+                        if (Grid.virtualize != null)
                         {
-                            if (Grid.virtualize != null)
-                            {
-                                await Grid.virtualize.RefreshDataAsync();
-                            }
-                        }
-                        else
-                        {
-                            await Grid.Reload();
+                            await Grid.virtualize.RefreshDataAsync();
                         }
                     }
+                    else
+                    {
+                        await Grid.Reload();
+                    }
+                }
 
+                if (FilterTemplate != null || FilterValueTemplate != null)
+                {
                     return;
                 }
             }
@@ -1353,7 +1373,7 @@ namespace Radzen.Blazor
         /// </summary>
         public virtual void ClearFilters()
         {
-            var fo = FilterOperator == FilterOperator.Custom
+            var fo = GetFilterOperator() == FilterOperator.Custom
                 ? FilterOperator.Custom
                 : typeof(System.Collections.IEnumerable).IsAssignableFrom(FilterPropertyType)
                     ? !string.IsNullOrEmpty(FilterProperty) && FilterProperty != Property ? FilterOperator.In : FilterOperator.Contains
@@ -1373,6 +1393,7 @@ namespace Radzen.Blazor
 
             LogicalFilterOperator = default(LogicalFilterOperator);
 
+            SetColumnDefaults();
         }
 
         FilterOperator? _filterOperator;

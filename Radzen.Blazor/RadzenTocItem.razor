@@ -1,7 +1,16 @@
 @inherits RadzenComponentWithChildren
 <li role="presentation" @ref=@Element style=@Style @attributes=@Attributes class=@GetCssClass() id=@GetId()>
     <div class=@WrapperClass>
-        <a href=@Selector class=@LinkClass @onclick:preventDefault @onclick=@OnClickAsync>@if (Template is null) {@Text} else {@Template}</a>
+        <a href="@href" @onclick="OnClick" class=@LinkClass aria-selected="@(selected ? "true" : "false")">
+            @if (Template is null)
+            {
+                @Text
+            }
+            else
+            {
+                @Template
+            }
+        </a>
     </div>
 @if (ChildContent != null)
 {

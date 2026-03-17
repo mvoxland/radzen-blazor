@@ -133,11 +133,16 @@ namespace Radzen
             {
                 if (_data != value)
                 {
+                    if (_data != null && _data is INotifyCollectionChanged oldCollection)
+                    {
+                        oldCollection.CollectionChanged -= OnCollectionChanged;
+                    }
+
                     _data = value;
 
-                    if (_data != null && _data is INotifyCollectionChanged)
+                    if (_data != null && _data is INotifyCollectionChanged newCollection)
                     {
-                        ((INotifyCollectionChanged)_data).CollectionChanged += OnCollectionChanged;
+                        newCollection.CollectionChanged += OnCollectionChanged;
                     }
 
                     OnDataChanged();
@@ -357,19 +362,18 @@ namespace Radzen
             bool visibleChanged = parameters.DidParameterChange(nameof(Visible), Visible);
             bool wasVisible = Visible;
 
+            if (visibleChanged && !firstRender && !wasVisible)
+            {
+                skip = 0;
+                CurrentPage = 0;
+                _view = null;
+            }
+
             await base.SetParametersAsync(parameters);
 
             if (pageSizeChanged && !firstRender)
             {
                await InvokeAsync(Reload);
-            }
-
-            // Reset to first page when becoming visible again
-            if (visibleChanged && !firstRender && Visible && !wasVisible)
-            {
-                skip = 0;
-                CurrentPage = 0;
-                _view = null;
             }
         }
 

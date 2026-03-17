@@ -63,7 +63,7 @@ namespace Radzen.Blazor
         /// Does nothing if the switch is disabled or read-only.
         /// </summary>
         /// <returns>A task representing the asynchronous toggle operation.</returns>
-        public async System.Threading.Tasks.Task Toggle()
+        public async Task Toggle()
         {
             if (Disabled || ReadOnly)
             {
@@ -77,20 +77,19 @@ namespace Radzen.Blazor
             await Change.InvokeAsync(Value);
         }
 
-        bool preventKeyPress = true;
-        async Task OnKeyPress(KeyboardEventArgs args, Task task)
+        bool stopKeydownPropagation;
+        async Task OnKeyPress(KeyboardEventArgs args)
         {
             var key = args.Code != null ? args.Code : args.Key;
 
-            if (key == "Space" || key == "Enter")
+            if (key == "Enter")
             {
-                preventKeyPress = true;
-
-                await task;
+                stopKeydownPropagation = true;
+                await Toggle();
             }
             else
             {
-                preventKeyPress = false;
+                stopKeydownPropagation = false;
             }
         }
     }

@@ -118,7 +118,6 @@ namespace Radzen.Blazor
             _ => false
         };
 
-#if NET7_0_OR_GREATER
         private TNum SumFloating<TNum>(TNum value1, TNum value2)
         {
             ArgumentNullException.ThrowIfNull(value1);
@@ -174,7 +173,6 @@ namespace Radzen.Blazor
 
             return newValue;
         }
-#endif
 
         async System.Threading.Tasks.Task UpdateValueWithStep(bool stepUp)
         {
@@ -186,7 +184,6 @@ namespace Radzen.Blazor
             var step = string.IsNullOrEmpty(Step) || Step == "any" ? 1 : decimal.Parse(Step.Replace(",", ".", StringComparison.Ordinal), System.Globalization.CultureInfo.InvariantCulture);
             TValue? newValue;
 
-#if NET7_0_OR_GREATER
             if (IsNumericType(Value))
             {
                 // cannot call UpdateValueWithStepNumeric directly because TValue is not value type constrained
@@ -196,7 +193,6 @@ namespace Radzen.Blazor
                 newValue = dynamicWrapper(Value, stepUp, step);
             }
             else
-#endif
             {
                 var valueToUpdate = ConvertToDecimal(Value);
 
@@ -381,19 +377,13 @@ namespace Radzen.Blazor
 
             if (!string.IsNullOrEmpty(Format))
             {
-                string formattedStringWithoutPlaceholder = Format.Replace("#", "", StringComparison.Ordinal).Trim();
-                
-                if (valueStr.Contains(Format, StringComparison.Ordinal))
-                {
-                    string currencyDecimalSeparator = Culture.NumberFormat.CurrencyDecimalSeparator;
+                valueStr = valueStr.Replace(Culture.NumberFormat.CurrencySymbol, "", StringComparison.Ordinal);
+                valueStr = valueStr.Replace(Culture.NumberFormat.NumberGroupSeparator, "", StringComparison.Ordinal);
 
-                    string[] splitFormatString = formattedStringWithoutPlaceholder.Split(currencyDecimalSeparator);
-                    string[] splitValueString = valueStr.Split(currencyDecimalSeparator);
-                    int lengthDifference = splitValueString[0].Length - splitFormatString[0].Length;
-                    formattedStringWithoutPlaceholder = formattedStringWithoutPlaceholder.PadLeft(formattedStringWithoutPlaceholder.Length + lengthDifference, '0');
+                if (Culture.NumberFormat.CurrencyGroupSeparator != Culture.NumberFormat.NumberGroupSeparator)
+                {
+                    valueStr = valueStr.Replace(Culture.NumberFormat.CurrencyGroupSeparator, "", StringComparison.Ordinal);
                 }
-                
-                valueStr = valueStr.Replace(formattedStringWithoutPlaceholder, "", StringComparison.Ordinal);
             }
 
             return new string(valueStr.Where(c => char.IsDigit(c) || char.IsPunctuation(c)).ToArray()).Replace("%", "", StringComparison.Ordinal);
@@ -588,12 +578,14 @@ namespace Radzen.Blazor
         }
 
         bool preventKeyPress;
+        bool stopKeydownPropagation;
         async Task OnKeyPress(KeyboardEventArgs args)
         {
             var key = args.Code != null ? args.Code : args.Key;
 
             if (key == "ArrowUp" || key == "ArrowDown")
             {
+                stopKeydownPropagation = true;
                 preventKeyPress = true;
 
                 if (key == "ArrowUp")
@@ -607,8 +599,9 @@ namespace Radzen.Blazor
 
                 preventKeyPress = false;
             }
-            else if (Immediate && args.Key.Length == 1 && char.IsDigit(args.Key[0]) && !args.CtrlKey && !args.AltKey && !args.ShiftKey)
+            else if (Immediate && (key == "Backspace" || key == "Delete" || (args.Key.Length == 1 && char.IsDigit(args.Key[0]) && !args.CtrlKey && !args.AltKey && !args.ShiftKey)))
             {
+                stopKeydownPropagation = true;
                 preventKeyPress = true;
 
                 if (JSRuntime != null)
@@ -621,6 +614,7 @@ namespace Radzen.Blazor
             }
             else
             {
+                stopKeydownPropagation = false;
                 preventKeyPress = false;
             }
         }

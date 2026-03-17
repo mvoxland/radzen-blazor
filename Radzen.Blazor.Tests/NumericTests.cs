@@ -1,5 +1,6 @@
 using System;
 using Bunit;
+using Microsoft.AspNetCore.Components.Web;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -285,6 +286,52 @@ namespace Radzen.Blazor.Tests
 
             Assert.True(raised);
             Assert.True(object.Equals(value, newValue));
+        }
+
+        [Fact]
+        public void Numeric_Raises_ChangeEvent_OnBackspace_When_Immediate()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+            ctx.JSInterop.SetupModule("_content/Radzen.Blazor/Radzen.Blazor.js");
+
+            var component = ctx.RenderComponent<RadzenNumeric<double?>>(parameters =>
+                parameters.Add(p => p.Immediate, true).Add(p => p.Value, 5));
+
+            var raised = false;
+            object newValue = 1;
+
+            ctx.JSInterop.Setup<string>("Radzen.getInputValue", _ => true).SetResult("");
+
+            component.SetParametersAndRender(parameters => parameters.Add(p => p.Change, args => { raised = true; newValue = args; }));
+
+            component.Find("input").KeyDown(new KeyboardEventArgs { Key = "Backspace", Code = "Backspace" });
+
+            Assert.True(raised);
+            Assert.Null(newValue);
+        }
+
+        [Fact]
+        public void Numeric_Raises_ChangeEvent_OnDelete_When_Immediate()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+            ctx.JSInterop.SetupModule("_content/Radzen.Blazor/Radzen.Blazor.js");
+
+            var component = ctx.RenderComponent<RadzenNumeric<double?>>(parameters =>
+                parameters.Add(p => p.Immediate, true).Add(p => p.Value, 5));
+
+            var raised = false;
+            object newValue = 1;
+
+            ctx.JSInterop.Setup<string>("Radzen.getInputValue", _ => true).SetResult("");
+
+            component.SetParametersAndRender(parameters => parameters.Add(p => p.Change, args => { raised = true; newValue = args; }));
+
+            component.Find("input").KeyDown(new KeyboardEventArgs { Key = "Delete", Code = "Delete" });
+
+            Assert.True(raised);
+            Assert.Null(newValue);
         }
 
         [Fact]
@@ -617,6 +664,52 @@ namespace Radzen.Blazor.Tests
             var maxDollars = new Dollars(maxValue);
             Assert.Contains($" value=\"{maxDollars}\"", component.Markup);
             Assert.Equal(component.Instance.Value, maxDollars);
+        }
+
+        [Fact]
+        public void Numeric_Format_WithOptionalDecimals_PreservesValue()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+            ctx.JSInterop.SetupModule("_content/Radzen.Blazor/Radzen.Blazor.js");
+
+            var component = ctx.RenderComponent<RadzenNumeric<float>>(
+                ComponentParameter.CreateParameter(nameof(RadzenNumeric<float>.Format), "0.##"),
+                ComponentParameter.CreateParameter(nameof(RadzenNumeric<float>.Culture), System.Globalization.CultureInfo.InvariantCulture)
+            );
+
+            object newValue = null;
+            component.SetParametersAndRender(parameters =>
+                parameters.Add(p => p.Change, args => { newValue = args; }));
+
+            component.Find("input").Change("10.55");
+
+            Assert.NotNull(newValue);
+            Assert.Equal(10.55f, (float)newValue, 2);
+        }
+
+        [Fact]
+        public void Numeric_Format_WithOptionalDecimals_PreservesValue_CommaCulture()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+            ctx.JSInterop.SetupModule("_content/Radzen.Blazor/Radzen.Blazor.js");
+
+            var culture = System.Globalization.CultureInfo.GetCultureInfo("de-DE");
+
+            var component = ctx.RenderComponent<RadzenNumeric<float>>(
+                ComponentParameter.CreateParameter(nameof(RadzenNumeric<float>.Format), "0.##"),
+                ComponentParameter.CreateParameter(nameof(RadzenNumeric<float>.Culture), culture)
+            );
+
+            object newValue = null;
+            component.SetParametersAndRender(parameters =>
+                parameters.Add(p => p.Change, args => { newValue = args; }));
+
+            component.Find("input").Change("10,55");
+
+            Assert.NotNull(newValue);
+            Assert.Equal(10.55f, (float)newValue, 2);
         }
 
         [Fact]

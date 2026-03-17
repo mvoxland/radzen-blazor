@@ -234,8 +234,14 @@ $column-draggable-shadow: 0 8px 10px 0 rgba(0, 0, 0, 0.1) !default;
 }
 
 .rz-grid-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
 
   th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
     background-color: var(--rz-grid-header-background-color);
     padding: 0;
     white-space: nowrap;
@@ -1055,6 +1061,9 @@ $column-draggable-shadow: 0 8px 10px 0 rgba(0, 0, 0, 0.1) !default;
 }
 
 .rz-grid-filter-icon {
+  background: none;
+  border: none;
+  padding: 0;
   justify-self: flex-end;
   color: var(--rz-grid-filter-color);
   margin-inline: var(--rz-grid-header-filter-icon-margin-inline);
@@ -1092,18 +1101,6 @@ $column-draggable-shadow: 0 8px 10px 0 rgba(0, 0, 0, 0.1) !default;
 
 .rz-grid-table td, .rz-grid-table th {
   padding: var(--rz-grid-cell-padding);
-}
-
-.rz-grid-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-
-  th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-  }
 }
 
 .rz-grid-table-fixed {
@@ -1150,7 +1147,7 @@ $column-draggable-shadow: 0 8px 10px 0 rgba(0, 0, 0, 0.1) !default;
 .rz-grid-table tfoot, .rz-grid-table tfoot td {
   position: sticky;
   bottom: 0;
-  z-index: 1;
+  z-index: 3;
 }
 
 .rz-grid-table {
@@ -1270,6 +1267,10 @@ $column-draggable-shadow: 0 8px 10px 0 rgba(0, 0, 0, 0.1) !default;
     display: flex;
     align-items: center;
     text-decoration: none;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
   }
 }
 
@@ -1292,6 +1293,22 @@ $column-draggable-shadow: 0 8px 10px 0 rgba(0, 0, 0, 0.1) !default;
 .rz-filter-menu-symbol {
   width: 1.75rem;
   display: inline-block;
+}
+
+.rz-filter-menu-item {
+  width: 100%;
+  text-align: start;
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rz-cell-filter-clear {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
 }
 
 .rz-filter-button {

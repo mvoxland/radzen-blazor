@@ -27,9 +27,12 @@
             <span class="rz-column-title"></span>
             @if (rowArgs?.Item1.Expandable == true && !(Grid?.LoadChildData.HasDelegate ?? false))
             {
-                <a id="@((Grid?.GridId() ?? "") + Item.GetHashCode())" aria-label="@(Grid?.ExpandChildItemAriaLabel ?? "")" @onclick:preventDefault="true" @onclick="@(_ => Grid?.ExpandItem(Item)!)" @onclick:stopPropagation>
+                <button type="button" tabindex="-1" id="@((Grid?.GridId() ?? "") + Item.GetHashCode())" aria-label="@(Grid?.ExpandChildItemAriaLabel ?? "")"
+                        aria-expanded="@(Grid != null && Grid.IsRowExpanded(Item) ? "true" : "false")"
+                        class="rz-button rz-button-sm rz-button-icon-only rz-variant-text rz-base rz-shade-default"
+                        @onclick="@(_ => Grid?.ExpandItem(Item)!)" @onclick:stopPropagation>
                     <span class="@(Grid?.ExpandedItemStyle(Item) ?? "")"></span>
-                </a>
+                </button>
             }
         </td>
     }
@@ -55,18 +58,23 @@
 
             object? colspan = null;
             cellAttr?.TryGetValue("colspan", out colspan);
-
-            if (colspan != null)
-            {
-                j = j + (int)Convert.ChangeType(colspan, TypeCode.Int32) - 1;
-            }
+            int colspanValue = colspan != null ? (int)Convert.ChangeType(colspan, TypeCode.Int32) : 1;
 
             object? rowspan = null;
             cellAttr?.TryGetValue("rowspan", out rowspan);
 
             if (rowspan != null && Grid != null)
             {
-                Grid.rowSpans.Add(j, (int)Convert.ChangeType(rowspan, TypeCode.Int32));
+                int rowspanValue = (int)Convert.ChangeType(rowspan, TypeCode.Int32);
+                for (int c = j; c < j + colspanValue; c++)
+                {
+                    Grid.rowSpans[c] = rowspanValue;
+                }
+            }
+
+            if (colspan != null)
+            {
+                j = j + colspanValue - 1;
             }
 
             @if (Grid != null && cellAttr != null && rowArgs != null)
@@ -82,7 +90,7 @@
 {
     @if (Grid.IsRowInEditMode(Item) && Grid.EditTemplate != null)
     {
-        <tr class="rz-expanded-row-content" @onkeydown:stopPropagation>
+        <tr class="rz-expanded-row-content" @onkeydown:stopPropagation="stopKeydownPropagation" @onkeydown="OnGuardKeyDown">
             <td colspan="@(Columns.Sum(c => c.GetColSpan()) + (Grid.ShowExpandColumn ? 1 : 0) + Grid.Groups.Count)">
                 <div class="rz-expanded-row-template" style="position:sticky">
                     <CascadingValue Value=@EditContext>
@@ -96,7 +104,7 @@
     }
     else if (Grid.Template != null)
     {
-        <tr class="rz-expanded-row-content" @onkeydown:stopPropagation>
+        <tr class="rz-expanded-row-content" @onkeydown:stopPropagation="stopKeydownPropagation" @onkeydown="OnGuardKeyDown">
             <td colspan="@(Columns.Sum(c => c.GetColSpan()) + (Grid.ShowExpandColumn ? 1 : 0) + Grid.Groups.Count)">
                 <div class="rz-expanded-row-template" style="position:sticky">
                     @Grid.Template(Item)

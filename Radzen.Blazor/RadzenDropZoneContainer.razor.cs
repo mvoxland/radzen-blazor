@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using System;
 using System.Collections.Generic;
 
@@ -7,9 +7,7 @@ namespace Radzen.Blazor
     /// <summary>
     /// RadzenDropZoneContainer component.
     /// </summary>
-#if NET6_0_OR_GREATER
     [CascadingTypeParameter(nameof(TItem))]
-#endif
     public partial class RadzenDropZoneContainer<TItem> : RadzenComponentWithChildren
     {
         /// <summary>
@@ -53,6 +51,20 @@ namespace Radzen.Blazor
         /// <value>The event callback raised on item drop.</value>
         [Parameter]
         public EventCallback<RadzenDropZoneItemEventArgs<TItem>> Drop { get; set; }
+
+        /// <summary>
+        /// The event callback raised when an item drag starts.
+        /// </summary>
+        /// <value>The event callback raised when an item drag starts.</value>
+        [Parameter]
+        public EventCallback<RadzenDropZoneItemEventArgs<TItem>> DragStart { get; set; }
+
+        /// <summary>
+        /// The event callback raised when an item drag ends.
+        /// </summary>
+        /// <value>The event callback raised when an item drag ends.</value>
+        [Parameter]
+        public EventCallback<RadzenDropZoneItemEventArgs<TItem>> DragEnd { get; set; }
 
         internal RadzenDropZoneItemEventArgs<TItem>? Payload { get; set; }
 

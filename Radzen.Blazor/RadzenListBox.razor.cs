@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.JSInterop;
 using System;
@@ -30,6 +30,18 @@ namespace Radzen.Blazor
     /// </example>
     public partial class RadzenListBox<TValue> : DropDownBase<TValue>
     {
+        bool stopKeydownPropagation;
+        async Task OnFilterKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+        {
+            stopKeydownPropagation = true;
+            await OnFilterKeyPress(args);
+            var key = args.Code ?? args.Key;
+            if (key == "Escape" || key == "Tab")
+            {
+                stopKeydownPropagation = false;
+            }
+        }
+
         /// <summary>
         /// Gets or sets the select all text.
         /// </summary>
@@ -109,6 +121,7 @@ namespace Radzen.Blazor
             await OnKeyPress(args, false);
         }
 
+
         private bool visibleChanged;
         private bool disabledChanged;
         private bool firstRender = true;
@@ -164,6 +177,20 @@ namespace Radzen.Blazor
                 }
             }
         }
+
+        /// <summary>
+        /// Gets or sets the empty text shown when Data is empty.
+        /// </summary>
+        /// <value>The empty text.</value>
+        [Parameter]
+        public string EmptyText { get; set; } = "No records to display.";
+
+        /// <summary>
+        /// Gets or sets the empty template shown when Data is empty.
+        /// </summary>
+        /// <value>The empty template.</value>
+        [Parameter]
+        public RenderFragment? EmptyTemplate { get; set; }
 
         /// <summary>
         /// Gets or sets a value indicating whether is read only.

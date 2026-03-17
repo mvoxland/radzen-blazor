@@ -3052,5 +3052,139 @@ namespace Radzen.Blazor.Tests
 
             Assert.True(raised);
         }
+
+        [Fact]
+        public void DataGrid_ShowsData_AfterVisibilityToggle()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+            ctx.JSInterop.SetupModule("_content/Radzen.Blazor/Radzen.Blazor.js");
+
+            var data = new[] { new { Col1 = "a", Col2 = "a" }, new { Col1 = "b", Col2 = "b" } };
+
+            RenderFragment columns = builder =>
+            {
+                builder.OpenComponent(0, typeof(RadzenDataGridColumn<dynamic>));
+                builder.AddAttribute(1, "Property", "Col1");
+                builder.AddAttribute(2, "Title", "Column 1");
+                builder.CloseComponent();
+
+                builder.OpenComponent(3, typeof(RadzenDataGridColumn<dynamic>));
+                builder.AddAttribute(4, "Property", "Col2");
+                builder.AddAttribute(5, "Title", "Column 2");
+                builder.CloseComponent();
+            };
+
+            var component = ctx.RenderComponent<RadzenDataGrid<dynamic>>(parameterBuilder =>
+            {
+                parameterBuilder.Add<IEnumerable<dynamic>>(p => p.Data, data);
+                parameterBuilder.Add<bool>(p => p.Visible, true);
+                parameterBuilder.Add<RenderFragment>(p => p.Columns, columns);
+            });
+
+            var cellsBefore = component.FindAll(".rz-cell-data");
+            Assert.True(cellsBefore.Count > 0, "Grid should show data initially");
+
+            component.SetParametersAndRender(parameterBuilder =>
+            {
+                parameterBuilder.Add<IEnumerable<dynamic>>(p => p.Data, data);
+                parameterBuilder.Add<bool>(p => p.Visible, false);
+                parameterBuilder.Add<RenderFragment>(p => p.Columns, columns);
+            });
+
+            component.SetParametersAndRender(parameterBuilder =>
+            {
+                parameterBuilder.Add<IEnumerable<dynamic>>(p => p.Data, data);
+                parameterBuilder.Add<bool>(p => p.Visible, true);
+                parameterBuilder.Add<RenderFragment>(p => p.Columns, columns);
+            });
+
+            var cellsAfter = component.FindAll(".rz-cell-data");
+            Assert.True(cellsAfter.Count > 0, "Grid should show data after visibility toggle");
+            Assert.Equal(cellsBefore.Count, cellsAfter.Count);
+        }
+
+        [Fact]
+        public void DataGrid_InsertRow_ShowsNewRow_WhenLoadDataReturnsEmpty()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+            ctx.JSInterop.SetupModule("_content/Radzen.Blazor/Radzen.Blazor.js");
+
+            IEnumerable<dynamic> data = Enumerable.Empty<dynamic>();
+            var count = 0;
+
+            var component = ctx.RenderComponent<RadzenDataGrid<dynamic>>(parameterBuilder =>
+            {
+                parameterBuilder.Add<IEnumerable<dynamic>>(p => p.Data, data);
+                parameterBuilder.Add<int>(p => p.Count, count);
+                parameterBuilder.Add<RenderFragment>(p => p.Columns, builder =>
+                {
+                    builder.OpenComponent(0, typeof(RadzenDataGridColumn<dynamic>));
+                    builder.AddAttribute(1, "Property", "Id");
+                    builder.AddAttribute(2, "Title", "Id");
+                    builder.CloseComponent();
+                });
+                parameterBuilder.Add<EventCallback<LoadDataArgs>>(p => p.LoadData,
+                    new EventCallback<LoadDataArgs>(null, (LoadDataArgs args) => { }));
+            });
+
+            // Verify empty message is shown initially
+            Assert.Contains("rz-datatable-emptymessage", component.Markup);
+
+            // Insert a new row
+            dynamic newItem = new { Id = 1 };
+            component.Instance.InsertRow(newItem);
+            component.Render();
+
+            // Verify the empty message is no longer shown and the new row is rendered
+            Assert.DoesNotContain("rz-datatable-emptymessage", component.Markup);
+            Assert.Contains("rz-cell-data", component.Markup);
+        }
+
+        [Fact]
+        public void DataGrid_InsertRow_ShowsNewRow_WhenCountIsZeroAndDataIsEmpty()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+            ctx.JSInterop.SetupModule("_content/Radzen.Blazor/Radzen.Blazor.js");
+
+            IEnumerable<dynamic> data = Enumerable.Empty<dynamic>();
+
+            RenderFragment columns = builder =>
+            {
+                builder.OpenComponent(0, typeof(RadzenDataGridColumn<dynamic>));
+                builder.AddAttribute(1, "Property", "Id");
+                builder.AddAttribute(2, "Title", "Id");
+                builder.CloseComponent();
+            };
+
+            var component = ctx.RenderComponent<RadzenDataGrid<dynamic>>(parameterBuilder =>
+            {
+                parameterBuilder.Add<IEnumerable<dynamic>>(p => p.Data, data);
+                parameterBuilder.Add<int>(p => p.Count, 0);
+                parameterBuilder.Add<RenderFragment>(p => p.Columns, columns);
+                parameterBuilder.Add<EventCallback<LoadDataArgs>>(p => p.LoadData,
+                    new EventCallback<LoadDataArgs>(null, (LoadDataArgs args) => { }));
+            });
+
+            // Insert a new row
+            dynamic newItem = new { Id = 1 };
+            component.Instance.InsertRow(newItem);
+
+            // Re-render with Count still 0 (simulates LoadData/virtualized scenario
+            // where Count reflects server-side count, not including pending inserts)
+            component.SetParametersAndRender(parameterBuilder =>
+            {
+                parameterBuilder.Add<IEnumerable<dynamic>>(p => p.Data, data);
+                parameterBuilder.Add<int>(p => p.Count, 0);
+                parameterBuilder.Add<RenderFragment>(p => p.Columns, columns);
+                parameterBuilder.Add<EventCallback<LoadDataArgs>>(p => p.LoadData,
+                    new EventCallback<LoadDataArgs>(null, (LoadDataArgs args) => { }));
+            });
+
+            // Even with Count=0, the inserted row should be visible
+            Assert.DoesNotContain("rz-datatable-emptymessage", component.Markup);
+        }
     }
 }

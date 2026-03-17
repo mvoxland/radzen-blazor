@@ -23,7 +23,7 @@
     const double CALENDAR_WIDTH = 3800.0;
 }
 
-<div @ref=view class="rz-view rz-timeline-view" tabindex="0" @onkeydown="@(args => OnKeyPress(args))" @onkeydown:preventDefault="@preventKeyPress" @onkeydown:stopPropagation
+<div @ref=view class="rz-view rz-timeline-view" tabindex="0" @onkeydown="@(args => OnKeyPress(args))" @onkeydown:preventDefault="@preventKeyPress" @onkeydown:stopPropagation="stopKeydownPropagation"
      @onfocus=@this.AsNonRenderingEventHandler(OnFocus)>
     <div class="rz-view-header">
         <div class="rz-slot-header">
@@ -43,6 +43,8 @@
         daysinmonth = DateTime.DaysInMonth(curYear, offSetMonth);
         date = realstart.StartOfMonth().StartOfWeek(Scheduler?.Culture ?? System.Globalization.CultureInfo.CurrentCulture);
         var startMonth = realstart;
+        var excessCounts = new Dictionary<DateTime, int>();
+        var dayAppointments = new Dictionary<DateTime, AppointmentData[]>();
 
         <div class="rz-month @(month == CurrentMonth ? "rz-state-focused" : "")">
             <div class="rz-events">
@@ -89,19 +91,17 @@
 
                         @if (excessCount > 0)
                         {
-                            var slotIndex = start.Subtract(date).Days;
-                            var slotWidth = (SLOT_WIDTH / CALENDAR_WIDTH) * 100;
-                            var left = ((slotIndex + 1) * slotWidth) + (100.0 / 85.0);
-                            var top = ((MaxAppointmentsInSlot + 1) * 1.5) + 1.7;
-                            var listDate = start;
-                            <a class="rz-event-list-btn" style="top: @(top.ToInvariantString())em; left: @(left.ToInvariantString())%" @onclick=@(args => { if (appointments != null && MoreText != null) _ = OnListClick(listDate, appointments); })>@(MoreText != null ? String.Format(MoreText, excessCount) : "")</a>
+                            excessCounts[start] = excessCount;
+                            dayAppointments[start] = appointments;
                         }
                     }
                 }
             </div>
             <div class="rz-slots">
                 <div @attributes=@Attributes(realstart, "rz-slot", false)>
-                    <div class="rz-slot-header" @onclick=@(args => OnMonthClick(startMonth))>
+                    <div class="rz-slot-header" role="button" tabindex="0"
+                         @onclick=@(args => OnMonthClick(startMonth))
+                         @onkeydown="@(args => OnMonthHeaderKeyDown(args, startMonth))">
                         @realstart.ToString("MMMM", Scheduler?.Culture ?? System.Globalization.CultureInfo.CurrentCulture)
                     </div>
                 </div>
@@ -119,6 +119,12 @@
                         <div @onclick="@(args => OnSlotClick(dayOfWeek))" @attributes=@Attributes(dayOfWeek, ($"rz-slot {dayType} {(CurrentDate.Date == dayOfWeek.Date ? "rz-state-focused" : "")}"), slotInMonth) ondragover="event.preventDefault();" @ondrop=@(args => @OnDrop(dayOfWeek))>
                             <div class="rz-slot-title">
                                 @dayOfWeek.Day
+                                @if (excessCounts.TryGetValue(dayOfWeek, out var excess))
+                                {
+                                    var listDate = dayOfWeek;
+                                    var apps = dayAppointments[listDate];
+                                    <button type="button" class="rz-event-list-btn" @onclick=@(args => { if (apps != null && MoreText != null) _ = OnListClick(listDate, apps); }) @onclick:stopPropagation>@(MoreText != null ? String.Format(MoreText, excess) : "")</button>
+                                }
                             </div>
                         </div>
                     }
@@ -231,6 +237,15 @@
             await Scheduler.SelectMonth(monthStart, AppointmentsInRange(monthStart, monthStart.EndOfMonth()));
     }
 
+    async Task OnMonthHeaderKeyDown(KeyboardEventArgs args, DateTime monthStart)
+    {
+        var key = args.Code != null ? args.Code : args.Key;
+        if (key == "Enter" || key == "Space")
+        {
+            await OnMonthClick(monthStart);
+        }
+    }
+
     async Task OnListClick(DateTime date, IEnumerable<AppointmentData> appointments)
     {
         if (Scheduler == null) return;
@@ -261,6 +276,7 @@
     DateTime CurrentDate;
     int CurrentMonth = -1;
     bool preventKeyPress = true;
+    bool stopKeydownPropagation;
 
     async Task OnKeyPress(KeyboardEventArgs args)
     {
@@ -294,6 +310,7 @@
             await ScrollIntoView("rz-slot rz-state-focused");
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (key == "ArrowUp" || key == "ArrowDown")
         {
@@ -304,6 +321,7 @@
             await ScrollIntoView("rz-month rz-state-focused");
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (key == "Enter")
         {
@@ -311,6 +329,7 @@
             await view.FocusAsync();
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else if (key == "Space")
         {
@@ -325,10 +344,12 @@
             }
 
             preventKeyPress = true;
+            stopKeydownPropagation = true;
         }
         else
         {
             preventKeyPress = false;
+            stopKeydownPropagation = false;
         }
     }
 

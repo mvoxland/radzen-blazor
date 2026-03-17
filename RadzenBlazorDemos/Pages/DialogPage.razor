@@ -1,15 +1,10 @@
-﻿@page "/dialog"
-@page "/docs/guides/components/dialog.html"
+@page "/dialog"
 
 <RadzenText TextStyle="TextStyle.H2" TagName="TagName.H1" class="rz-pt-8">
-    Dialog
+    Blazor Dialog
 </RadzenText>
 <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" class="rz-pb-4">
-    Demonstration and configuration of the Radzen Blazor Dialog component.
-</RadzenText>
-
-<RadzenText TextStyle="TextStyle.Subtitle2" TagName="TagName.P" class="rz-pb-4">
-    These demos showcase modal dialogs using <code>DialogService</code> to open pages as dialogs, display inline content, show busy indicators, confirmation and alert dialogs, close-on-outside-click behavior, side dialogs, custom CSS styling, and cascading value updates for dynamic dialog properties.
+    Inline, confirm, alert, side, and busy dialog modes.
 </RadzenText>
 
 <HelpPrerequirements/>
@@ -62,6 +57,16 @@
 </RadzenText>
 <RadzenExample ComponentName="Dialog" Example="DialogAlert">
     <DialogAlert />
+</RadzenExample>
+
+<RadzenText Anchor="dialog#prevent-close" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-12">
+    Prevent dialog from closing
+</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-8">
+    Use the <code>CanClose</code> callback to prevent a dialog from closing when the user clicks the X button, overlay, or presses ESC. Return <code>false</code> to block the close. Programmatic <code>Close()</code> calls always succeed.
+</RadzenText>
+<RadzenExample ComponentName="Dialog" Example="DialogCanClose" AdditionalSourceCodePages=@(new List<string>() { "/demos/Pages/DialogCanCloseContent.razor" })>
+    <DialogCanClose />
 </RadzenExample>
 
 <RadzenText Anchor="dialog#close-dialog-by-clicking-outside" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-12">

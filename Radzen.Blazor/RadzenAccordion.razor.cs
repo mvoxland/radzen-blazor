@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Radzen.Blazor.Rendering;
 using System;
@@ -104,6 +104,11 @@ namespace Radzen.Blazor
         List<RadzenAccordionItem> items = new List<RadzenAccordionItem>();
 
         /// <summary>
+        /// Gets the collection of <see cref="RadzenAccordionItem" /> components that belong to this accordion.
+        /// </summary>
+        public IReadOnlyList<RadzenAccordionItem> AccordionItems => items.AsReadOnly();
+
+        /// <summary>
         /// Adds the item.
         /// </summary>
         /// <param name="item">The item.</param>
@@ -149,6 +154,17 @@ namespace Radzen.Blazor
         public void Refresh()
         {
             StateHasChanged();
+        }
+
+        bool _itemRefreshPending;
+
+        internal void ItemRefresh()
+        {
+            if (!_itemRefreshPending)
+            {
+                _itemRefreshPending = true;
+                StateHasChanged();
+            }
         }
 
         /// <summary>
@@ -229,6 +245,40 @@ namespace Radzen.Blazor
             StateHasChanged();
         }
 
+        /// <summary>
+        /// Expands all accordion items.
+        /// </summary>
+        public async Task ExpandAll()
+        {
+            foreach (var item in items.Where(i => i.Visible && !i.Disabled))
+            {
+                if (!item.GetSelected())
+                {
+                    await item.SetSelected(true);
+                    await Expand.InvokeAsync(items.IndexOf(item));
+                }
+            }
+
+            StateHasChanged();
+        }
+
+        /// <summary>
+        /// Collapses all accordion items.
+        /// </summary>
+        public async Task CollapseAll()
+        {
+            foreach (var item in items.Where(i => i.Visible && !i.Disabled))
+            {
+                if (item.GetSelected())
+                {
+                    await item.SetSelected(false);
+                    await Collapse.InvokeAsync(items.IndexOf(item));
+                }
+            }
+
+            StateHasChanged();
+        }
+
         async System.Threading.Tasks.Task CollapseAll(RadzenAccordionItem item)
         {
             if (!Multiple && items.Count > 1)
@@ -246,6 +296,13 @@ namespace Radzen.Blazor
 
         internal int focusedIndex = -1;
         bool preventKeyPress = true;
+
+        bool stopKeydownPropagation = true;
+        void OnGuardKeyDown(KeyboardEventArgs args)
+        {
+            var key = args.Code ?? args.Key;
+            stopKeydownPropagation = key != "Escape";
+        }
         async Task OnKeyPress(KeyboardEventArgs args)
         {
             var key = args.Code != null ? args.Code : args.Key;
@@ -279,6 +336,8 @@ namespace Radzen.Blazor
         /// <inheritdoc />
         public override async Task SetParametersAsync(ParameterView parameters)
         {
+            _itemRefreshPending = false;
+
             if (parameters.DidParameterChange(nameof(SelectedIndex), SelectedIndex))
             {
                 var item = items.Where(i => i.Visible).ElementAtOrDefault(parameters.GetValueOrDefault<int>(nameof(SelectedIndex)));
