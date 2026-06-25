@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using System;
+using System.Threading.Tasks;
 
 namespace Radzen.Blazor
 {
@@ -123,21 +124,71 @@ namespace Radzen.Blazor
             await Change.InvokeAsync(Value);
         }
 
+        /// <summary>
+        /// Gets or sets the size of the component.
+        /// </summary>
+        [Parameter]
+        public InputSize InputSize { get; set; } = InputSize.Medium;
+
         /// <inheritdoc />
         protected override string GetComponentCssClass()
         {
-            return GetClassList("rz-textbox").ToString();
+            return GetClassList("rz-textbox").AddInputSize(InputSize).ToString();
         }
 
         /// <inheritdoc />
-        protected override void OnAfterRender(bool firstRender)
+        protected override string? GetId()
         {
-            base.OnAfterRender(firstRender);
+            return Name ?? base.GetId();
+        }
 
-            if (firstRender && JSRuntime != null)
+        IJSObjectReference? _jsRef;
+        bool _jsParamsChanged;
+
+        /// <inheritdoc />
+        public override async Task SetParametersAsync(ParameterView parameters)
+        {
+            if (parameters.DidParameterChange(nameof(Mask), Mask) ||
+                parameters.DidParameterChange(nameof(Pattern), Pattern) ||
+                parameters.DidParameterChange(nameof(CharacterPattern), CharacterPattern))
             {
-                JSRuntime.InvokeVoidAsync("eval", $"Radzen.mask('{GetId()}', '{Mask}', '{Pattern}', '{CharacterPattern}')");
+                _jsParamsChanged = true;
             }
+
+            await base.SetParametersAsync(parameters);
+        }
+
+        /// <inheritdoc />
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            await base.OnAfterRenderAsync(firstRender);
+
+            if ((firstRender || _jsParamsChanged) && JSRuntime != null)
+            {
+                _jsParamsChanged = false;
+
+                await JSRuntime.InvokeVoidAsync("Radzen.mask", GetId(), Mask, Pattern, CharacterPattern);
+                if (!Immediate)
+                {
+                    if (_jsRef != null)
+                    {
+                        await _jsRef.InvokeVoidAsync("dispose");
+                        await _jsRef.DisposeAsync();
+                    }
+
+                    _jsRef = await JSRuntime.InvokeAsync<IJSObjectReference>(
+                        "Radzen.createMask", Element, GetId(), Mask, Pattern, CharacterPattern);
+                }
+            }
+        }
+
+        /// <inheritdoc />
+        public override void Dispose()
+        {
+            base.Dispose();
+            _jsRef?.InvokeVoidAsync("dispose");
+            _jsRef?.DisposeAsync();
+            GC.SuppressFinalize(this);
         }
     }
 }

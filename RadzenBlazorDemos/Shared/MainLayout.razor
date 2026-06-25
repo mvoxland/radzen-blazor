@@ -30,7 +30,7 @@
                 <RadzenStack  Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.End">
                     <div class="rz-display-none rz-display-sm-inline-flex align-items-center">
                         <RadzenLink Path="/docs/api" Text="API Reference" title="Radzen Blazor Components API Reference" class="rz-mx-2 rz-mx-lg-4" target="_blank" />
-                        <RadzenLink Path="https://github.com/radzenhq/radzen-blazor" Text="GitHub" title="Star Radzen Blazor Components on GitHub" class="rz-text-nowrap rz-mx-2 rz-mx-lg-4" target="_blank" />
+                        <GitHubStarLink />
                     </div>
                     <RadzenAppearanceToggle class="rz-mx-2" />
                     <RadzenSidebarToggle Icon="settings" Click="@(() => configSidebarExpanded = !configSidebarExpanded)" class="rz-m-0" />
@@ -47,6 +47,10 @@
                     <RadzenRow class="rz-mx-auto" Style="max-width: 1600px;">
                         <RadzenColumn Size="12" SizeMD=@(example?.Toc != null ? 10 : 12)>
                             @Body
+                            <DemoSeo Example="@example" />
+                            <div class="rz-mt-12">
+                                <NewsletterSignup />
+                            </div>
                             <RadzenCard class="rz-mt-12 rz-display-block rz-p-6 rz-p-md-12 rz-pb-12 rz-background-color-base-darker dark" Style="overflow: hidden; ">
                                 <RadzenRow AlignItems="AlignItems.Center" Gap="0px" class="rz-pb-12 rz-mb-4">
                                     <RadzenColumn SizeMD="12" class="rz-p-0 rz-pb-12 rz-mb-12">

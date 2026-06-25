@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components.Web;
 using System.Collections.Generic;
 using System;
+using Radzen.Blazor.Rendering;
 
 namespace Radzen.Blazor
 {
@@ -33,6 +34,8 @@ namespace Radzen.Blazor
     /// </example>
     public partial class RadzenDropDown<TValue> : DropDownBase<TValue>
     {
+        IJSObjectReference? _jsRef;
+
         bool isOpen;
 
         bool stopKeydownPropagation = true;
@@ -64,6 +67,15 @@ namespace Radzen.Blazor
         /// <value>The render fragment for customizing the selected value display.</value>
         [Parameter]
         public RenderFragment<dynamic>? ValueTemplate { get; set; }
+
+        /// <summary>
+        /// Gets or sets whether <see cref="ValueTemplate"/> is rendered even when there is no selected item.
+        /// When <c>true</c>, the template is invoked with a <c>null</c> context so it can render an editor
+        /// (e.g. a text box) for an empty value. Templates must handle a null context.
+        /// </summary>
+        /// <value><c>true</c> to render <see cref="ValueTemplate"/> on empty value; otherwise <c>false</c>. Default is <c>false</c>.</value>
+        [Parameter]
+        public bool ShowValueTemplateOnEmpty { get; set; }
 
         /// <summary>
         /// Gets or sets the template displayed when the dropdown data source is empty or no items match the filter.
@@ -187,7 +199,9 @@ namespace Radzen.Blazor
         protected override async Task OpenPopup(string key = "ArrowDown", bool isFilter = false, bool isFromClick = false)
         {
             if (Disabled)
+            {
                 return;
+            }
 
             if (!isOpen)
             {
@@ -256,12 +270,14 @@ namespace Radzen.Blazor
         [Parameter]
         public bool Chips { get; set; }
 
+        private string? selectedItemsText;
+
         /// <summary>
         /// Gets or sets the selected items text.
         /// </summary>
         /// <value>The selected items text.</value>
         [Parameter]
-        public string SelectedItemsText { get; set; } = "items selected";
+        public string SelectedItemsText { get => selectedItemsText ?? Localize(nameof(RadzenStrings.DropDown_SelectedItemsText)); set => selectedItemsText = value; }
 
         /// <summary>
         /// Gets or sets the select all text.
@@ -340,6 +356,12 @@ namespace Radzen.Blazor
                     if (!Disabled && JSRuntime != null)
                     {
                         await JSRuntime.InvokeVoidAsync("Radzen.preventArrows", Element);
+                    }
+
+                    if (JSRuntime != null)
+                    {
+                        _jsRef = await JSRuntime.InvokeAsync<IJSObjectReference>(
+                            "Radzen.createDropDown", Element);
                     }
 
                     if (reload)
@@ -425,14 +447,25 @@ namespace Radzen.Blazor
             }
         }
 
+        /// <summary>
+        /// Gets or sets the size of the component.
+        /// </summary>
+        [Parameter]
+        public InputSize InputSize { get; set; } = InputSize.Medium;
+
         /// <inheritdoc />
         protected override string GetComponentCssClass()
         {
             return GetClassList("rz-dropdown")
+                        .AddInputSize(InputSize)
                         .Add("rz-clear", AllowClear)
                         .Add("rz-dropdown-chips", Chips && selectedItems.Count > 0)
                         .ToString();
         }
+
+        string PopupCssClass => ClassList.Create(Multiple ? "rz-multiselect-panel" : "rz-dropdown-panel")
+                                         .AddInputSize(InputSize)
+                                         .ToString();
 
         /// <inheritdoc />
         public override void Dispose()
@@ -443,6 +476,9 @@ namespace Radzen.Blazor
             {
                 JSRuntime.InvokeVoid("Radzen.destroyPopup", PopupID);
             }
+
+            _jsRef?.InvokeVoidAsync("dispose");
+            _jsRef?.DisposeAsync();
 
             GC.SuppressFinalize(this);
         }

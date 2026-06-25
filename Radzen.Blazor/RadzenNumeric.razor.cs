@@ -5,6 +5,7 @@ using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -32,7 +33,31 @@ namespace Radzen.Blazor
     /// <code>
     /// &lt;RadzenNumeric @bind-Value=@optionalValue TValue="int?" ShowUpDown="false" Placeholder="Optional" /&gt;
     /// </code>
+    /// Suppressing the default ArrowUp/ArrowDown increment behavior via the <see cref="KeyDown" /> event
+    /// (e.g. to allow custom keyboard navigation between inputs):
+    /// <code>
+    /// &lt;RadzenNumeric @bind-Value=@value TValue="int" KeyDown=@OnKeyDown /&gt;
+    /// @code {
+    ///     int value;
+    ///     void OnKeyDown(NumericKeyboardEventArgs args)
+    ///     {
+    ///         var key = args.OriginalEvent.Code ?? args.OriginalEvent.Key;
+    ///         if (key == "ArrowUp" || key == "ArrowDown")
+    ///         {
+    ///             args.PreventDefault();
+    ///             // custom logic: focus next/previous input, etc.
+    ///         }
+    ///     }
+    /// }
+    /// </code>
     /// </example>
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2026, Justification = TrimMessages.NumericTypePreserved)]
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2067, Justification = TrimMessages.NumericTypePreserved)]
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2070, Justification = TrimMessages.NumericTypePreserved)]
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2072, Justification = TrimMessages.NumericTypePreserved)]
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2080, Justification = TrimMessages.NumericTypePreserved)]
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2087, Justification = TrimMessages.NumericTypePreserved)]
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2091, Justification = TrimMessages.NumericTypePreserved)]
     public partial class RadzenNumeric<TValue> : FormComponentWithAutoComplete<TValue>
     {
         /// <summary>
@@ -57,10 +82,60 @@ namespace Radzen.Blazor
         /// </summary>
         protected ElementReference input;
 
+        /// <summary>
+        /// Gets or sets the size of the component.
+        /// </summary>
+        [Parameter]
+        public InputSize InputSize { get; set; } = InputSize.Medium;
+
         /// <inheritdoc />
         protected override string GetComponentCssClass()
         {
-            return GetClassList("rz-numeric").ToString();
+            return GetClassList("rz-numeric").AddInputSize(InputSize).ToString();
+        }
+
+        IJSObjectReference? _jsRef;
+        bool _jsParamsChanged;
+
+        /// <inheritdoc />
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            await base.OnAfterRenderAsync(firstRender);
+
+            if ((firstRender || _jsParamsChanged) && Visible && JSRuntime != null)
+            {
+                _jsParamsChanged = false;
+
+                if (_jsRef != null)
+                {
+                    await _jsRef.InvokeVoidAsync("dispose");
+                    await _jsRef.DisposeAsync();
+                }
+
+                var minArg = Min.HasValue ? (object)Min.Value.ToString(CultureInfo.InvariantCulture) : null;
+                var maxArg = Max.HasValue ? (object)Max.Value.ToString(CultureInfo.InvariantCulture) : null;
+                _jsRef = await JSRuntime.InvokeAsync<IJSObjectReference>(
+                    "Radzen.createNumeric", Element, IsInteger(),
+                    Culture.NumberFormat.NumberDecimalSeparator, minArg, maxArg, IsNullable);
+            }
+
+            if (pendingSelectionStart.HasValue && JSRuntime != null)
+            {
+                var start = pendingSelectionStart.Value;
+                var end = pendingSelectionEnd ?? start;
+                pendingSelectionStart = null;
+                pendingSelectionEnd = null;
+                await JSRuntime.InvokeVoidAsync("Radzen.setSelectionRange", input, start, end);
+            }
+        }
+
+        /// <inheritdoc />
+        public override void Dispose()
+        {
+            base.Dispose();
+            _jsRef?.InvokeVoidAsync("dispose");
+            _jsRef?.DisposeAsync();
+            GC.SuppressFinalize(this);
         }
 
         string GetInputCssClass()
@@ -212,7 +287,9 @@ namespace Radzen.Blazor
             }
 
             if(object.Equals(newValue, Value))
+            {
                 return;
+            }
 
             Value = newValue!;
 
@@ -391,7 +468,10 @@ namespace Radzen.Blazor
 
         private static string NormalizeDigits(string input)
         {
-            if (string.IsNullOrEmpty(input)) return input;
+            if (string.IsNullOrEmpty(input))
+            {
+                return input;
+            }
 
             var sb = new System.Text.StringBuilder(input.Length);
             foreach (var ch in input)
@@ -478,9 +558,15 @@ namespace Radzen.Blazor
             if (newValue is IComparable<decimal> c)
             {
                 if (Max != null && c.CompareTo(Max.Value) > 0)
+                {
                     return ConvertFromDecimal(Max.Value);
+                }
+
                 if (Min != null && c.CompareTo(Min.Value) < 0)
+                {
                     return ConvertFromDecimal(Min.Value);
+                }
+
                 return newValue;
             }
 
@@ -509,7 +595,9 @@ namespace Radzen.Blazor
         private decimal ConvertToDecimal(TValue? input)
         {
             if (input == null)
+            {
                 return default;
+            }
 
             var converter = TypeDescriptor.GetConverter(typeof(TValue));
             if (converter.CanConvertTo(typeof(decimal)))
@@ -531,7 +619,9 @@ namespace Radzen.Blazor
         private TValue? ConvertFromDecimal(decimal? input)
         {
             if (input == null)
+            {
                 return default(TValue?);
+            }
 
             var converter = TypeDescriptor.GetConverter(typeof(TValue));
             if (converter.CanConvertFrom(typeof(decimal)))
@@ -564,6 +654,11 @@ namespace Radzen.Blazor
             bool minChanged = parameters.DidParameterChange(nameof(Min), Min);
             bool maxChanged = parameters.DidParameterChange(nameof(Max), Max);
 
+            if (minChanged || maxChanged)
+            {
+                _jsParamsChanged = true;
+            }
+
             await base.SetParametersAsync(parameters);
 
             if (minChanged && IsJSRuntimeAvailable)
@@ -577,13 +672,32 @@ namespace Radzen.Blazor
             }
         }
 
+        /// <summary>
+        /// Gets or sets an event callback raised when a key is pressed while the input is focused.
+        /// Call <see cref="NumericKeyboardEventArgs.PreventDefault" /> on the argument to suppress the built-in
+        /// ArrowUp/ArrowDown increment/decrement behavior and allow custom key handling (e.g. navigating to
+        /// the next/previous input).
+        /// </summary>
+        [Parameter]
+        public EventCallback<NumericKeyboardEventArgs> KeyDown { get; set; }
+
         bool preventKeyPress;
         bool stopKeydownPropagation;
+        int? pendingSelectionStart;
+        int? pendingSelectionEnd;
+
         async Task OnKeyPress(KeyboardEventArgs args)
         {
             var key = args.Code != null ? args.Code : args.Key;
 
-            if (key == "ArrowUp" || key == "ArrowDown")
+            NumericKeyboardEventArgs? keyDownArgs = null;
+            if (KeyDown.HasDelegate)
+            {
+                keyDownArgs = new NumericKeyboardEventArgs { OriginalEvent = args };
+                await KeyDown.InvokeAsync(keyDownArgs);
+            }
+
+            if ((key == "ArrowUp" || key == "ArrowDown") && keyDownArgs?.IsDefaultPrevented != true)
             {
                 stopKeydownPropagation = true;
                 preventKeyPress = true;
@@ -606,6 +720,13 @@ namespace Radzen.Blazor
 
                 if (JSRuntime != null)
                 {
+                    var selection = await JSRuntime.InvokeAsync<int[]>("Radzen.getSelectionRange", input);
+                    if (selection != null && selection.Length >= 2)
+                    {
+                        pendingSelectionStart = selection[0];
+                        pendingSelectionEnd = selection[1];
+                    }
+
                     var value = await JSRuntime.InvokeAsync<string>("Radzen.getInputValue", input);
                     await SetValue(value);
                 }
@@ -619,17 +740,21 @@ namespace Radzen.Blazor
             }
         }
 
+        private string? upAriaLabel;
+
         /// <summary>
         /// Gets or sets the up button aria-label attribute.
         /// </summary>
         [Parameter]
-        public string UpAriaLabel { get; set; } = "Up";
+        public string UpAriaLabel { get => upAriaLabel ?? Localize(nameof(RadzenStrings.Numeric_UpAriaLabel)); set => upAriaLabel = value; }
+
+        private string? downAriaLabel;
 
         /// <summary>
         /// Gets or sets the down button aria-label attribute.
         /// </summary>
         [Parameter]
-        public string DownAriaLabel { get; set; } = "Down";
+        public string DownAriaLabel { get => downAriaLabel ?? Localize(nameof(RadzenStrings.Numeric_DownAriaLabel)); set => downAriaLabel = value; }
 
         /// <summary>
         /// Sets the focus on the input element.

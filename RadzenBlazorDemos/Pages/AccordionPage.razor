@@ -4,7 +4,7 @@
     Blazor Accordion
 </RadzenText>
 <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" class="rz-pb-4">
-    Single or multiple expand modes, dynamic items, and expand/collapse events.
+    The Blazor Accordion shows collapsible panels with single or multiple expand modes, dynamic items, and expand/collapse events.
 </RadzenText>
 
 <RadzenText Anchor="accordion#single-expand" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-8">
@@ -45,6 +45,16 @@
 </RadzenText>
 <RadzenExample ComponentName="Accordion" Example="AccordionEvents">
     <AccordionEvents />
+</RadzenExample>
+
+<RadzenText Anchor="accordion#client-render-mode" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-12">
+    Client-side rendering
+</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-8">
+    Set <code>RenderMode</code> to <code>AccordionRenderMode.Client</code> to handle expand/collapse with JavaScript. All items are rendered initially and toggled client-side for faster interaction.
+</RadzenText>
+<RadzenExample ComponentName="Accordion" Example="AccordionClientRenderMode">
+    <AccordionClientRenderMode />
 </RadzenExample>
 
 <RadzenText Anchor="accordion#disable-expand-collapse" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-8">

@@ -12,39 +12,59 @@
         @if (Multiline)
         {
             <textarea @ref="@search" @attributes="InputAttributes" @onkeydown="@OnFilterKeyPress" value="@Value" disabled="@Disabled"
-                oninput="@OpenScript()" tabindex="@(Disabled ? "-1" : $"{TabIndex}")"  @onchange="@OnChange" onfocus="@(OpenOnFocus ? OpenScript() : null)"
+                tabindex="@(Disabled ? "-1" : $"{TabIndex}")"  @onchange="@OnChange"
                 aria-autocomplete="list" aria-haspopup="listbox" aria-controls="@ListId" aria-expanded="@(IsPopupOpen ? "true" : "false")" autocomplete="off" role="combobox"
-                class=@InputClass onblur="Radzen.activeElement = null"
+                class=@InputClass
                 id="@Name" placeholder="@CurrentPlaceholder" maxlength="@MaxLength" />
         }
         else
         {
             <input @ref="@search" @attributes="InputAttributes" @onkeydown="@OnFilterKeyPress" value="@Value" disabled="@Disabled"
-                oninput="@OpenScript()" tabindex="@(Disabled ? "-1" : $"{TabIndex}")" @onchange="@OnChange" onfocus="@(OpenOnFocus ? OpenScript() : null)"
+                tabindex="@(Disabled ? "-1" : $"{TabIndex}")" @onchange="@OnChange"
                 aria-autocomplete="list" aria-haspopup="listbox" aria-controls="@ListId" aria-expanded="@(IsPopupOpen ? "true" : "false")" autocomplete="off" role="combobox"
-                class=@InputClass onblur="Radzen.activeElement = null"
+                class=@InputClass
                 type="@InputType" id="@Name" placeholder="@CurrentPlaceholder" maxlength="@MaxLength" />
         }
-        <div id="@PopupID" class="rz-autocomplete-panel" style="@PopupStyle">
+        <div id="@PopupID" class="@PopupCssClass" style="@PopupStyle">
             <ul id="@ListId" @ref="@list" class="rz-autocomplete-items rz-autocomplete-list" role="listbox">
                 @if (OpenOnFocus || (!string.IsNullOrEmpty(searchText) || !string.IsNullOrEmpty(customSearchText)))
                 {
-                    @foreach (var item in LoadData.HasDelegate ? Data != null ? Data : Enumerable.Empty<object>() : (View != null ? View : Enumerable.Empty<object>()))
+                    if (IsLoading && LoadingTemplate != null)
                     {
-                        <li role="option" class="rz-autocomplete-list-item" tabindex="-1"
-                            aria-selected="@(object.Equals(item, SelectedItem) ? "true" : "false")"
-                            @onclick="@(() => OnSelectItem(item))" onmousedown="Radzen.activeElement = null">
-                            <span>
-                                @if (Template != null)
-                                {
-                                    @Template(item)
-                                }
-                                else
-                                {
-                                    @PropertyAccess.GetItemOrValueFromProperty(item, TextProperty)
-                                }
-                            </span>
+                        <li class="rz-autocomplete-list-item" tabindex="-1" role="presentation">
+                            @LoadingTemplate
                         </li>
+                    }
+                    else
+                    {
+                        var items = (LoadData.HasDelegate ? Data : View) ?? Enumerable.Empty<object>();
+                        var hasItems = false;
+
+                        foreach (var item in items)
+                        {
+                            hasItems = true;
+                            <li role="option" class="rz-autocomplete-list-item" tabindex="-1"
+                                aria-selected="@(object.Equals(item, SelectedItem) ? "true" : "false")"
+                                @onclick="@(() => OnSelectItem(item))" onmousedown="Radzen.activeElement = null">
+                                <span>
+                                    @if (Template != null)
+                                    {
+                                        @Template(item)
+                                    }
+                                    else
+                                    {
+                                        @PropertyAccess.GetItemOrValueFromProperty(item, TextProperty)
+                                    }
+                                </span>
+                            </li>
+                        }
+
+                        if (!hasItems && !IsLoading && EmptyTemplate != null)
+                        {
+                            <li class="rz-autocomplete-list-item" tabindex="-1" role="presentation">
+                                @EmptyTemplate
+                            </li>
+                        }
                     }
                 }
             </ul>

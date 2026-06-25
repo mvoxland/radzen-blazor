@@ -3,6 +3,7 @@ using Microsoft.JSInterop;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Linq;
 using System.Reflection;
@@ -40,6 +41,8 @@ namespace Radzen
     /// }
     /// </code>
     /// </example>
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2026, Justification = TrimMessages.DataTypePreserved)]
+    [UnconditionalSuppressMessage(TrimMessages.Trimming, TrimMessages.IL2111, Justification = TrimMessages.ComponentTypePreserved)]
     public class DialogService : IDisposable
     {
         private DotNetObjectReference<DialogService>? reference;
@@ -124,7 +127,7 @@ namespace Radzen
         /// <param name="title">The text displayed in the title bar of the dialog.</param>
         /// <param name="parameters">The dialog parameters.</param>
         /// <param name="options">The dialog options.</param>
-        public virtual void Open<T>(string title, Dictionary<string, object?>? parameters = null, DialogOptions? options = null) where T : ComponentBase
+        public virtual void Open<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(string title, Dictionary<string, object?>? parameters = null, DialogOptions? options = null) where T : ComponentBase
         {
             OpenDialog<T>(title, parameters, options);
         }
@@ -136,20 +139,15 @@ namespace Radzen
         /// <param name="componentType">The type of the component to be displayed in the dialog. Must inherit from <see cref="ComponentBase"/>.</param>
         /// <param name="parameters">The dialog parameters.</param>
         /// <param name="options">The dialog options.</param>
-        public virtual void Open(string title, Type componentType, Dictionary<string, object?>? parameters = null, DialogOptions? options = null)
+        [RequiresUnreferencedCode(TrimMessages.GenericMethodReflection)]
+        public virtual void Open(string title, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType, Dictionary<string, object?>? parameters = null, DialogOptions? options = null)
         {
             if (!typeof(ComponentBase).IsAssignableFrom(componentType))
             {
                 throw new ArgumentException("The component type must be a subclass of ComponentBase.", nameof(componentType));
             }
 
-            var method = GetType().GetMethod(nameof(OpenDialog), BindingFlags.Instance | BindingFlags.NonPublic);
-            if (method == null)
-            {
-                throw new InvalidOperationException("OpenDialog method not found.");
-            }
-
-            method.MakeGenericMethod(componentType).Invoke(this, new object[] { title, parameters!, options! });
+            OpenDialog(title, componentType, parameters, options);
         }
 
         /// <summary>
@@ -175,7 +173,7 @@ namespace Radzen
         /// <param name="parameters">The dialog parameters. Passed as property values of <typeparamref name="T" />.</param>
         /// <param name="options">The dialog options.</param>
         /// <returns>The value passed as argument to <see cref="Close" />.</returns>
-        public virtual Task<dynamic?> OpenAsync<T>(string title, Dictionary<string, object?>? parameters = null, DialogOptions? options = null) where T : ComponentBase
+        public virtual Task<dynamic?> OpenAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(string title, Dictionary<string, object?>? parameters = null, DialogOptions? options = null) where T : ComponentBase
         {
             var task = new TaskCompletionSource<dynamic?>();
             tasks.Add(task);
@@ -194,7 +192,8 @@ namespace Radzen
         /// <param name="options">The dialog options.</param>
         /// <returns>A task that represents the result passed as an argument to <see cref="Close"/>.</returns>
         /// <exception cref="ArgumentException">Thrown if <paramref name="componentType"/> does not inherit from <see cref="ComponentBase"/>.</exception>
-        public virtual Task<dynamic?> OpenAsync(string title, Type componentType, Dictionary<string, object?>? parameters = null, DialogOptions? options = null)
+        [RequiresUnreferencedCode(TrimMessages.GenericMethodReflection)]
+        public virtual Task<dynamic?> OpenAsync(string title, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType, Dictionary<string, object?>? parameters = null, DialogOptions? options = null)
         {
             if (!typeof(ComponentBase).IsAssignableFrom(componentType))
             {
@@ -204,13 +203,7 @@ namespace Radzen
             var task = new TaskCompletionSource<dynamic?>();
             tasks.Add(task);
 
-            var method = GetType().GetMethod(nameof(OpenDialog), BindingFlags.Instance | BindingFlags.NonPublic);
-            if (method == null)
-            {
-                throw new InvalidOperationException("OpenDialog method not found.");
-            }
-
-            method.MakeGenericMethod(componentType).Invoke(this, new object[] { title, parameters!, options! });
+            OpenDialog(title, componentType, parameters, options);
 
             return task.Task;
         }
@@ -224,7 +217,7 @@ namespace Radzen
         /// <param name="parameters">The dialog parameters. Passed as property values of <typeparamref name="T"/></param>
         /// <param name="options">The side dialog options.</param>
         /// <returns>A task that completes when the dialog is closed or a new one opened</returns>
-        public Task<dynamic?> OpenSideAsync<T>(string title, Dictionary<string, object?>? parameters = null, SideDialogOptions? options = null)
+        public Task<dynamic?> OpenSideAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(string title, Dictionary<string, object?>? parameters = null, SideDialogOptions? options = null)
             where T : ComponentBase
         {
             CloseSideSilently();
@@ -279,7 +272,7 @@ namespace Radzen
         /// <param name="title">The text displayed in the title bar of the side dialog.</param>
         /// <param name="parameters">The dialog parameters. Passed as property values of <typeparamref name="T"/></param>
         /// <param name="options">The side dialog options.</param>
-        public void OpenSide<T>(string title, Dictionary<string, object?>? parameters = null, SideDialogOptions? options = null)
+        public void OpenSide<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(string title, Dictionary<string, object?>? parameters = null, SideDialogOptions? options = null)
             where T : ComponentBase
         {
             CloseSideSilently();
@@ -381,7 +374,9 @@ namespace Radzen
 
             // register the cancellation token
             if (cancellationToken.HasValue)
+            {
                 cancellationToken.Value.Register(() => task.TrySetCanceled());
+            }
 
             tasks.Add(task);
 
@@ -407,7 +402,9 @@ namespace Radzen
 
             // register the cancellation token
             if (cancellationToken.HasValue)
+            {
                 cancellationToken.Value.Register(() => task.TrySetCanceled());
+            }
 
             tasks.Add(task);
 
@@ -440,7 +437,12 @@ namespace Radzen
         /// </summary>
         protected List<DialogOptions> dialogs = new List<DialogOptions>();
 
-        internal void OpenDialog<T>(string? title, Dictionary<string, object?>? parameters, DialogOptions? options)
+        internal void OpenDialog<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] T>(string? title, Dictionary<string, object?>? parameters, DialogOptions? options)
+        {
+            OpenDialog(title, typeof(T), parameters, options);
+        }
+
+        internal void OpenDialog(string? title, Type componentType, Dictionary<string, object?>? parameters, DialogOptions? options)
         {
             // Validate and set default values for the dialog options
             options ??= new();
@@ -457,7 +459,7 @@ namespace Radzen
             options.WrapperCssClass = !String.IsNullOrEmpty(options.WrapperCssClass) ? options.WrapperCssClass : "";
             options.ContentCssClass = !String.IsNullOrEmpty(options.ContentCssClass) ? options.ContentCssClass : "";
 
-            OnOpen?.Invoke(title, typeof(T), parameters, options);
+            OnOpen?.Invoke(title, componentType, parameters, options);
         }
 
         /// <summary>
@@ -1100,7 +1102,11 @@ namespace Radzen
             get => minWidth;
             set
             {
-                if (Equals(value, minWidth)) return;
+                if (Equals(value, minWidth))
+                {
+                    return;
+                }
+
                 minWidth = value;
                 OnPropertyChanged(nameof(MinWidth));
             }
@@ -1116,7 +1122,11 @@ namespace Radzen
             get => minHeight;
             set
             {
-                if (Equals(value, minHeight)) return;
+                if (Equals(value, minHeight))
+                {
+                    return;
+                }
+
                 minHeight = value;
                 OnPropertyChanged(nameof(MinHeight));
             }
@@ -1132,7 +1142,11 @@ namespace Radzen
             get => resizeBarTitle;
             set
             {
-                if (value == resizeBarTitle) return;
+                if (value == resizeBarTitle)
+                {
+                    return;
+                }
+
                 resizeBarTitle = value;
                 OnPropertyChanged(nameof(ResizeBarTitle));
             }
@@ -1148,7 +1162,11 @@ namespace Radzen
             get => resizeBarAriaLabel;
             set
             {
-                if (value == resizeBarAriaLabel) return;
+                if (value == resizeBarAriaLabel)
+                {
+                    return;
+                }
+
                 resizeBarAriaLabel = value;
                 OnPropertyChanged(nameof(ResizeBarAriaLabel));
             }

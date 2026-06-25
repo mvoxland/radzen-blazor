@@ -607,6 +607,81 @@ namespace Radzen.Blazor.Tests
             Assert.Contains(2, originalHashSet);
         }
 
+        [Fact]
+        public void DropDown_Renders_Multiple_WithChips_SelectedItemsTitle()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var component = DropDown<IEnumerable<int>>(ctx, parameters =>
+            {
+                parameters.Add(p => p.Multiple, true);
+                parameters.Add(p => p.Chips, true);
+                parameters.Add(p => p.ValueProperty, nameof(DataItem.Id));
+                parameters.Add(p => p.Value, new List<int> { 1, 2 });
+            });
+
+            var wrapper = component.Find(".rz-dropdown-chips-wrapper");
+            Assert.Equal("Item 1,Item 2", wrapper.GetAttribute("title"));
+        }
+
+        [Fact]
+        public void DropDown_Renders_Multiple_WithLabel_SelectedItemsTitle()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var component = DropDown<IEnumerable<int>>(ctx, parameters =>
+            {
+                parameters.Add(p => p.Multiple, true);
+                parameters.Add(p => p.Chips, false);
+                parameters.Add(p => p.ValueProperty, nameof(DataItem.Id));
+                parameters.Add(p => p.Value, new List<int> { 1, 2 });
+            });
+
+            var label = component.Find("span.rz-dropdown-label");
+            Assert.Equal("Item 1,Item 2", label.GetAttribute("title"));
+        }
+
+        [Fact]
+        public void DropDown_DoesNotRender_Multiple_SelectedItemsTitle_WithoutTextProperty()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var data = new[] { "Item 1", "Item 2" };
+            var component = ctx.RenderComponent<RadzenDropDown<IEnumerable<string>>>(parameters =>
+            {
+                parameters.Add(p => p.Multiple, true);
+                parameters.Add(p => p.Chips, true);
+                parameters.Add(p => p.Data, data);
+                parameters.Add(p => p.Value, new List<string> { "Item 1", "Item 2" });
+            });
+
+            var wrapper = component.Find(".rz-dropdown-chips-wrapper");
+            Assert.False(wrapper.HasAttribute("title"));
+        }
+
+        [Fact]
+        public void DropDown_Renders_Multiple_SelectedItemsTitle_CustomSeparator()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var component = DropDown<IEnumerable<int>>(ctx, parameters =>
+            {
+                parameters.Add(p => p.Multiple, true);
+                parameters.Add(p => p.Chips, false);
+                parameters.Add(p => p.Separator, "; ");
+                parameters.Add(p => p.MaxSelectedLabels, 1);
+                parameters.Add(p => p.ValueProperty, nameof(DataItem.Id));
+                parameters.Add(p => p.Value, new List<int> { 1, 2 });
+            });
+
+            var label = component.Find("span.rz-dropdown-label");
+            Assert.Equal("Item 1; Item 2", label.GetAttribute("title"));
+        }
+
         class ReferenceCollectionDropDown<T> : Radzen.Blazor.RadzenDropDown<T>
         {
             protected override void OnInitialized()
@@ -721,6 +796,37 @@ namespace Radzen.Blazor.Tests
             Assert.Contains("rz-dropdown-clear-icon", component.Markup);
         }
 
+        class BaseDataItem
+        {
+            public string Text { get; set; }
+        }
+
+        class DerivedDataItem : BaseDataItem
+        {
+            public int Id { get; set; }
+        }
+
+        [Fact]
+        public void DropDown_Renders_SelectedBaseValue_WhenDataItemsAreDerived()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var data = new[] { new DerivedDataItem { Text = "Item 1", Id = 1 } };
+            var value = new BaseDataItem { Text = "Item 1" };
+
+            var component = ctx.RenderComponent<RadzenDropDown<BaseDataItem>>(parameters =>
+            {
+                parameters.Add(p => p.Data, data);
+                parameters.Add(p => p.TextProperty, nameof(BaseDataItem.Text));
+                parameters.Add(p => p.Value, value);
+            });
+
+            var dropdown = component.Find("div.rz-dropdown");
+
+            Assert.Equal("Item 1", dropdown.GetAttribute("aria-label"));
+        }
+
         [Fact]
         public void DropDown_DoesNotRender_AllowClear_WhenNotAllowed()
         {
@@ -738,6 +844,95 @@ namespace Radzen.Blazor.Tests
             });
 
             Assert.DoesNotContain("rz-dropdown-clear-icon", component.Markup);
+        }
+
+        [Fact]
+        public void DropDown_FilterInput_HasComboboxAriaAttributes()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var component = DropDown<int>(ctx, parameters =>
+            {
+                parameters.Add(p => p.AllowFiltering, true);
+                parameters.Add(p => p.ValueProperty, nameof(DataItem.Id));
+            });
+
+            var listbox = component.Find("ul[role='listbox']");
+            var filterInput = component.Find("input.rz-dropdown-filter");
+
+            Assert.Equal("combobox", filterInput.GetAttribute("role"));
+            Assert.Equal(listbox.Id, filterInput.GetAttribute("aria-controls"));
+            Assert.Equal("listbox", filterInput.GetAttribute("aria-haspopup"));
+            Assert.NotNull(filterInput.GetAttribute("aria-expanded"));
+            Assert.Equal("list", filterInput.GetAttribute("aria-autocomplete"));
+        }
+
+        [Fact]
+        public void DropDown_Multiple_FilterInput_HasComboboxAriaAttributes()
+        {
+            using var ctx = new TestContext();
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var data = new[]
+            {
+                new DataItem { Text = "Item 1", Id = 1 },
+                new DataItem { Text = "Item 2", Id = 2 },
+            };
+
+            var component = ctx.RenderComponent<RadzenDropDown<IEnumerable<int>>>(parameters =>
+            {
+                parameters.Add(p => p.Data, data);
+                parameters.Add(p => p.TextProperty, nameof(DataItem.Text));
+                parameters.Add(p => p.ValueProperty, nameof(DataItem.Id));
+                parameters.Add(p => p.Multiple, true);
+                parameters.Add(p => p.AllowFiltering, true);
+            });
+
+            var listbox = component.Find("ul[role='listbox']");
+            var filterInput = component.Find(".rz-multiselect-filter-container input");
+
+            Assert.Equal("combobox", filterInput.GetAttribute("role"));
+            Assert.Equal(listbox.Id, filterInput.GetAttribute("aria-controls"));
+            Assert.Equal("listbox", filterInput.GetAttribute("aria-haspopup"));
+            Assert.NotNull(filterInput.GetAttribute("aria-expanded"));
+            Assert.Equal("list", filterInput.GetAttribute("aria-autocomplete"));
+        }
+
+        [Fact]
+        public void DropDown_ConsumerSuppliedAriaLabel_OverridesComputedAriaLabel()
+        {
+            using var ctx = new TestContext();
+
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var component = DropDown<int>(ctx, parameters =>
+            {
+                parameters.Add(p => p.ValueProperty, nameof(DataItem.Id));
+                parameters.AddUnmatched("aria-label", "Filter by status");
+            });
+
+            var combobox = component.Find("div[role='combobox']");
+
+            Assert.Equal("Filter by status", combobox.GetAttribute("aria-label"));
+        }
+
+        [Fact]
+        public void DropDown_WithoutConsumerAriaLabel_FallsBackToComputedAriaLabel()
+        {
+            using var ctx = new TestContext();
+
+            ctx.JSInterop.Mode = JSRuntimeMode.Loose;
+
+            var component = DropDown<int>(ctx, parameters =>
+            {
+                parameters.Add(p => p.ValueProperty, nameof(DataItem.Id));
+                parameters.Add(p => p.Value, 1);
+            });
+
+            var combobox = component.Find("div[role='combobox']");
+
+            Assert.Equal("Item 1", combobox.GetAttribute("aria-label"));
         }
     }
 }

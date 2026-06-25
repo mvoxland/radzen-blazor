@@ -4,7 +4,7 @@
     Blazor DatePicker
 </RadzenText>
 <RadzenText TextStyle="TextStyle.Subtitle1" TagName="TagName.P" class="rz-pb-4">
-    Calendar mode, time picker, and date range support.
+    The Radzen Blazor DatePicker is a date and time picker with an inline calendar mode, time selection, date ranges, min/max and disabled dates, and DateOnly/TimeOnly binding.
 </RadzenText>
 
 <RadzenText Anchor="datepicker#get-set-value" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-8">
@@ -15,6 +15,16 @@
 </RadzenText>
 <RadzenExample ComponentName="DatePicker" Example="DatePickerBindValue">
     <DatePickerBindValue />
+</RadzenExample>
+
+<RadzenText Anchor="datepicker#immediate" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-12">
+    DatePicker with immediate value update
+</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-8">
+    Use <code>Immediate="true"</code> to update the bound value as the user types a valid date, rather than waiting for the input to lose focus.
+</RadzenText>
+<RadzenExample ComponentName="DatePicker" Example="DatePickerImmediate">
+    <DatePickerImmediate />
 </RadzenExample>
 
 <RadzenText Anchor="datepicker#value-and-change-event" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-12">
@@ -168,6 +178,16 @@
 </RadzenExample>
 
 
+<RadzenText Anchor="datepicker#sizes" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-8">
+    DatePicker Sizes
+</RadzenText>
+<RadzenText TextStyle="TextStyle.Body1" class="rz-mb-8">
+    Use the <code>InputSize</code> property to set the DatePicker size. Available sizes are ExtraSmall, Small, Medium (default), and Large.
+</RadzenText>
+<RadzenExample ComponentName="DatePicker" Example="DatePickerSizes">
+    <DatePickerSizes />
+</RadzenExample>
+
 <RadzenText Anchor="datepicker#keyboard-navigation" TextStyle="TextStyle.H5" TagName="TagName.H2" class="rz-pt-12">
     Keyboard Navigation
 </RadzenText>
@@ -183,8 +203,8 @@
         new KeyboardShortcut { Key = "Tab", Action = "Navigate to a DatePicker component." },
         new KeyboardShortcut { Key = "Tab on open popup", Action = "Navigate forward across available picker components." },
         new KeyboardShortcut { Key = "Shift + Tab on open popup", Action = "Navigate backward across available picker components." },
-        new KeyboardShortcut { Key = "RightArrow on open popup", Action = "Select previous day." },
-        new KeyboardShortcut { Key = "LeftArrow on open popup", Action = "Select next day." },
+        new KeyboardShortcut { Key = "RightArrow on open popup", Action = "Select next day." },
+        new KeyboardShortcut { Key = "LeftArrow on open popup", Action = "Select previous day." },
         new KeyboardShortcut { Key = "UpArrow on open popup", Action = "Select same day from previous week." },
         new KeyboardShortcut { Key = "DownArrow on open popup", Action = "Select same day from next week." },
         new KeyboardShortcut { Key = "Enter in an opened popup", Action = "Select the focused day and close the popup." },

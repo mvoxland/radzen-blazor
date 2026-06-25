@@ -83,12 +83,14 @@ namespace Radzen.Blazor
         [Parameter]
         public string? ImageStyle { get; set; }
 
+        private string? imageAlternateText;
+
         /// <summary>
         /// Gets or sets the text.
         /// </summary>
         /// <value>The text.</value>
         [Parameter]
-        public string ImageAlternateText { get; set; } = "image";
+        public string ImageAlternateText { get => imageAlternateText ?? Localize(nameof(RadzenStrings.MenuItem_ImageAlternateText)); set => imageAlternateText = value; }
 
         /// <summary>
         /// Gets or sets the navigation link match.
@@ -112,6 +114,10 @@ namespace Radzen.Blazor
         public RenderFragment? ChildContent { get; set; }
 
         internal string? SubmenuId => ChildContent != null ? $"{GetId()}-submenu" : null;
+
+        internal string ArrowIcon => Parent?.Flyout == true
+            ? "keyboard_arrow_right"
+            : "keyboard_arrow_down";
 
         /// <summary>
         /// Gets or sets the click callback.
@@ -213,11 +219,9 @@ namespace Radzen.Blazor
             {
                 if (Parent.ClickToOpen || ChildContent != null)
                 {
-                    events.Add("onclick", "Radzen.toggleMenuItem(this)");
                 }
                 else
                 {
-                    events.Add("onclick", "Radzen.toggleMenuItem(this, event, false)");
                 }
             }
 

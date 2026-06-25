@@ -8,7 +8,7 @@
 
 @if (Visible)
 {
-    <div @ref="@Element" @attributes="Attributes" class="@GetCssClass()" onmousedown="Radzen.activeElement = null"
+    <div @ref="@Element" aria-label="@(!Multiple && selectedItem != null ? GetItemOrValueFromProperty(selectedItem, TextProperty ?? string.Empty) : EmptyAriaLabel)" @attributes="Attributes" class="@GetCssClass()"
          role="combobox" aria-haspopup="listbox" aria-expanded="@isPopupOpen.ToString().ToLowerInvariant()" aria-controls="@ListId" aria-disabled="@(Disabled.ToString().ToLowerInvariant())"
          @onclick="@(args => OpenPopup("ArrowDown", false, true))" @onclick:preventDefault @onclick:stopPropagation style="@Style" tabindex="@(Disabled ? "-1" : $"{TabIndex}")"
          @onkeydown="@((args) => OnKeyPress(args))" @onkeydown:preventDefault="@preventKeydown" id="@GetId()" @onfocus=@this.AsNonRenderingEventHandler(OnFocus)>
@@ -18,10 +18,10 @@
                    aria-label="@(!Multiple && internalValue != null ? internalValue : EmptyAriaLabel)" @attributes="InputAttributes"/>
         </div>
 
-        @if (ValueTemplate != null && selectedItem != null)
+        @if (ValueTemplate != null && (selectedItem != null || (ShowValueTemplateOnEmpty && !Multiple)))
         {
             <span class="rz-dropdown-label rz-inputtext" style="width:100%;" @onkeydown:stopPropagation="stopKeydownPropagation" @onkeydown="OnGuardKeyDown">
-                @ValueTemplate(selectedItem)
+                @ValueTemplate(selectedItem!)
             </span>
         }
         else if (Template != null && selectedItem != null)
@@ -38,7 +38,10 @@
         }
         else if (Chips && selectedItems.Count > 0 && selectedItems.Count < MaxSelectedLabels)
         {
-            <div class="rz-dropdown-chips-wrapper">
+            var selectedItemsTitle = !string.IsNullOrEmpty(TextProperty)
+                ? string.Join(Separator, selectedItems.Select(i => GetItemOrValueFromProperty(i, TextProperty)))
+                : null;
+            <div class="rz-dropdown-chips-wrapper" title="@selectedItemsTitle">
                 @foreach (var item in selectedItems)
                 {
                     <div class="rz-chip rz-chip-base rz-variant-filled rz-shade-default">
@@ -69,7 +72,10 @@
         }
         else if (selectedItems.Count > 0)
         {
-            <span class="rz-dropdown-label rz-inputtext" @onkeydown:stopPropagation="stopKeydownPropagation" @onkeydown="OnGuardKeyDown">
+            var selectedItemsTitle = !string.IsNullOrEmpty(TextProperty)
+                ? string.Join(Separator, selectedItems.Select(i => GetItemOrValueFromProperty(i, TextProperty)))
+                : null;
+            <span class="rz-dropdown-label rz-inputtext" title="@selectedItemsTitle" @onkeydown:stopPropagation="stopKeydownPropagation" @onkeydown="OnGuardKeyDown">
                 @if (selectedItems.Count < MaxSelectedLabels)
                 {
                     @if (Template == null && ValueTemplate == null)
@@ -117,7 +123,7 @@
             <span class="notranslate rz-dropdown-trigger-icon rzi rzi-chevron-down"></span>
         </div>
 
-        <div id="@PopupID" class="@(Multiple ? "rz-multiselect-panel" : "rz-dropdown-panel")"
+        <div id="@PopupID" class="@PopupCssClass"
              style="display:none; box-sizing: border-box">
             @if(!Multiple && (AllowFiltering || HeaderTemplate != null))
             {
@@ -128,7 +134,8 @@
                 else
                 {
                     <div class="rz-dropdown-filter-container">
-                        <input aria-label="@SearchAriaLabel" id="@SearchID" @ref="@search" tabindex="@(Disabled ? "-1" : $"{TabIndex}")" placeholder="@(FilterPlaceholder ?? string.Empty)" class="rz-dropdown-filter rz-inputtext" autocomplete="@FilterAutoCompleteType" aria-autocomplete="none" type="text"
+                        <input aria-label="@SearchAriaLabel" id="@SearchID" @ref="@search" tabindex="@(Disabled ? "-1" : $"{TabIndex}")" placeholder="@(FilterPlaceholder ?? string.Empty)" class="rz-dropdown-filter rz-inputtext" autocomplete="@FilterAutoCompleteType" aria-autocomplete="list" type="text"
+                               role="combobox" aria-controls="@ListId" aria-haspopup="listbox" aria-expanded="@isPopupOpen.ToString().ToLowerInvariant()"
                                @onchange="@OnFilter" @onkeydown="@OnFilterKeyPress" @onkeydown:preventDefault="@preventFilterKeydown" value="@(searchText ?? string.Empty)"
                                @oninput="@OnFilterInput" />
                         <span class="notranslate rz-dropdown-filter-icon rzi rzi-search"></span>
@@ -166,8 +173,9 @@
                     @if (AllowFiltering)
                     {
                         <div class="rz-multiselect-filter-container">
-                            <input id="@SearchID" tabindex="@(Disabled ? "-1" : $"{TabIndex}")" class="rz-inputtext" role="textbox" type="text"
-                                   onclick="Radzen.preventDefaultAndStopPropagation(event)" aria-label="@SearchAriaLabel"
+                            <input id="@SearchID" tabindex="@(Disabled ? "-1" : $"{TabIndex}")" class="rz-inputtext" role="combobox" type="text"
+                                   aria-controls="@ListId" aria-haspopup="listbox" aria-expanded="@isPopupOpen.ToString().ToLowerInvariant()" aria-autocomplete="list"
+                                   aria-label="@SearchAriaLabel"
                                    @ref="@search" @oninput="@OnFilterInput"
                                    @onchange="@OnFilter" @onkeydown="@OnFilterKeyPress" @onkeydown:preventDefault="@preventFilterKeydown" value="@(searchText ?? string.Empty)" autocomplete="@FilterAutoCompleteType" />
                             <span class="notranslate rz-multiselect-filter-icon rzi rzi-search"></span>

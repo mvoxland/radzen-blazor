@@ -148,6 +148,187 @@ namespace Radzen.Blazor.Tests
             var nextButton = component.Find("button.rz-steps-next");
             Assert.DoesNotContain("rz-state-disabled", nextButton.GetAttribute("class"));
         }
+
+        [Fact]
+        public void Steps_NotVisible_DoesNotRender()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Visible, false);
+            });
+
+            Assert.DoesNotContain("rz-steps", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Renders_SelectedIndex()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.SelectedIndex, 1);
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Step 1");
+                    builder.CloseComponent();
+                    builder.OpenComponent<RadzenStepsItem>(2);
+                    builder.AddAttribute(3, "Text", "Step 2");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.Contains("rz-steps-current", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Renders_StepTexts()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Registration");
+                    builder.CloseComponent();
+                    builder.OpenComponent<RadzenStepsItem>(2);
+                    builder.AddAttribute(3, "Text", "Payment");
+                    builder.CloseComponent();
+                    builder.OpenComponent<RadzenStepsItem>(4);
+                    builder.AddAttribute(5, "Text", "Confirmation");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.Contains("Registration", component.Markup);
+            Assert.Contains("Payment", component.Markup);
+            Assert.Contains("Confirmation", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Renders_StyleParameter()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Style, "width:100%");
+            });
+
+            Assert.Contains("width:100%", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Transition_None_DoesNotRenderAnimationClass()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Transition, StepsTransition.None);
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Step 1");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.DoesNotContain("rz-steps-fade", component.Markup);
+            Assert.DoesNotContain("rz-steps-slide", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Transition_Fade_RendersAnimationClass()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Transition, StepsTransition.Fade);
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Step 1");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.Contains("rz-steps-fade", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Transition_Slide_RendersAnimationClass()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Transition, StepsTransition.Slide);
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Step 1");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.Contains("rz-steps-slide", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Transition_Fade_RendersTransitionDurationStyle()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Transition, StepsTransition.Fade);
+                parameters.Add(p => p.TransitionDuration, 500);
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Step 1");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.Contains("--rz-steps-transition-duration: 500ms", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Transition_None_DoesNotRenderTransitionDurationStyle()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Transition, StepsTransition.None);
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Step 1");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.DoesNotContain("--rz-steps-transition-duration", component.Markup);
+        }
+
+        [Fact]
+        public void Steps_Transition_DefaultDuration_Is300()
+        {
+            using var ctx = new TestContext();
+            var component = ctx.RenderComponent<RadzenSteps>(parameters =>
+            {
+                parameters.Add(p => p.Transition, StepsTransition.Fade);
+                parameters.Add<RenderFragment>(p => p.Steps, builder =>
+                {
+                    builder.OpenComponent<RadzenStepsItem>(0);
+                    builder.AddAttribute(1, "Text", "Step 1");
+                    builder.CloseComponent();
+                });
+            });
+
+            Assert.Contains("--rz-steps-transition-duration: 300ms", component.Markup);
+        }
     }
 }
+
 
